@@ -1,23 +1,22 @@
-// Vercel Edge Function — served at /api/lookup
+// Cloudflare Pages Function — served at /api/lookup
 //
-// This is the Vercel-compatible twin of functions/api/lookup.js (which is
-// Cloudflare Pages' function format and only works when deployed there).
-// Vercel automatically turns any file under /api/*.js at the repo root
-// into a serverless endpoint at that same path — no other config needed,
-// as long as this file lives at api/lookup.js in the repo root.
+// Keeps the Anthropic API key on the server; the browser never sees it.
+// Requires the caller to send a valid Supabase session token, and caps
+// each user to a fixed number of lookups per day so one account can't
+// run up your shared Anthropic bill.
 //
-// Logic is identical to the Cloudflare version: keeps the Anthropic API
-// key server-side, requires a valid Supabase session, and caps each user
-// to a fixed number of lookups per day so one account can't run up your
-// shared Anthropic bill.
+// Rather than verifying the JWT signature ourselves (which depends on
+// which signing system a given Supabase project uses — legacy shared
+// secret vs. the newer per-project signing keys), we just ask Supabase
+// directly "is this token valid?" via its own auth endpoint. Slightly
+// slower (one extra network hop), but it can never go stale no matter
+// how Supabase changes their key format in the future.
 //
-// Requires the same three environment variables, set in Vercel under
-// Project Settings > Environment Variables:
+// Requires three environment variables, set in Cloudflare Pages under
+// Settings > Environment variables (see README):
 //   ANTHROPIC_API_KEY   — your Anthropic API key
 //   SUPABASE_URL        — your Supabase project URL
 //   SUPABASE_ANON_KEY   — your Supabase publishable/anon key (same one used in index.html)
-
-export const config = { runtime: 'edge' };
 
 const DAILY_LOOKUP_LIMIT = 100;
 
@@ -51,23 +50,13 @@ async function incrementLookupUsage(token, supabaseUrl, anonKey) {
   return await res.json();
 }
 
-export default async function handler(request) {
+export async function onRequestPost(context) {
+  const { request, env } = context;
   const jsonHeaders = { 'Content-Type': 'application/json' };
 
-  if (request.method !== 'POST') {
+  if (!env.ANTHROPIC_API_KEY || !env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
     return new Response(
-      JSON.stringify({ error: { message: 'Use POST' } }),
-      { status: 405, headers: jsonHeaders }
-    );
-  }
-
-  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-  const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
-
-  if (!ANTHROPIC_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    return new Response(
-      JSON.stringify({ error: { message: 'Server is missing ANTHROPIC_API_KEY, SUPABASE_URL, or SUPABASE_ANON_KEY. Set these in Vercel > Project Settings > Environment Variables.' } }),
+      JSON.stringify({ error: { message: 'Server is missing ANTHROPIC_API_KEY, SUPABASE_URL, or SUPABASE_ANON_KEY. See README setup steps.' } }),
       { status: 500, headers: jsonHeaders }
     );
   }
@@ -81,7 +70,7 @@ export default async function handler(request) {
     );
   }
 
-  const user = await getSupabaseUser(token, SUPABASE_URL, SUPABASE_ANON_KEY);
+  const user = await getSupabaseUser(token, env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
   if (!user || !user.id) {
     return new Response(
       JSON.stringify({ error: { message: 'Session expired or invalid — please sign in again.' } }),
@@ -89,7 +78,7 @@ export default async function handler(request) {
     );
   }
 
-  const usageCount = await incrementLookupUsage(token, SUPABASE_URL, SUPABASE_ANON_KEY);
+  const usageCount = await incrementLookupUsage(token, env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
   if (usageCount !== null && usageCount > DAILY_LOOKUP_LIMIT) {
     return new Response(
       JSON.stringify({ error: { message: `Daily lookup limit reached (${DAILY_LOOKUP_LIMIT}/day). Try again tomorrow.` } }),
@@ -111,7 +100,7 @@ export default async function handler(request) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
+      'x-api-key': env.ANTHROPIC_API_KEY,
       'anthropic-version': '2023-06-01'
     },
     body: JSON.stringify(body)
@@ -122,5 +111,13 @@ export default async function handler(request) {
   return new Response(JSON.stringify(data), {
     status: upstream.status,
     headers: jsonHeaders
+  });
+}
+
+// Reject other methods explicitly rather than falling through silently.
+export async function onRequestGet() {
+  return new Response(JSON.stringify({ error: { message: 'Use POST' } }), {
+    status: 405,
+    headers: { 'Content-Type': 'application/json' }
   });
 }
