@@ -1,19 +1,24 @@
-// Cloudflare Pages Function — served at /api/lookup
+// Vercel Function — served at /api/lookup
 //
-// Keeps the Anthropic API key on the server; the browser never sees it.
-// Requires the caller to send a valid Supabase session token, and caps
-// each user to a fixed number of lookups per day so one account can't
-// run up your shared Anthropic bill.
+// This is the Vercel-compatible twin of functions/api/lookup.js (which is
+// Cloudflare Pages' function format and only works when deployed there).
+// Vercel automatically turns any file under /api/*.js at the repo root
+// into a serverless endpoint at that same path — no other config needed,
+// as long as this file lives at api/lookup.js in the repo root.
 //
-// Rather than verifying the JWT signature ourselves (which depends on
-// which signing system a given Supabase project uses — legacy shared
-// secret vs. the newer per-project signing keys), we just ask Supabase
-// directly "is this token valid?" via its own auth endpoint. Slightly
-// slower (one extra network hop), but it can never go stale no matter
-// how Supabase changes their key format in the future.
+// Uses the classic Node.js Serverless Function signature (req, res) —
+// this is Vercel's current default runtime. An earlier version of this
+// file used the standalone Edge Runtime (`export const config = { runtime:
+// 'edge' }`), but Vercel deprecated that product in June 2025 in favor of
+// Node.js as the default for everything, so that's been removed here.
 //
-// Requires three environment variables, set in Cloudflare Pages under
-// Settings > Environment variables (see README):
+// Logic is identical to the Cloudflare version: keeps the Anthropic API
+// key server-side, requires a valid Supabase session, and caps each user
+// to a fixed number of lookups per day so one account can't run up your
+// shared Anthropic bill.
+//
+// Requires the same three environment variables, set in Vercel under
+// Project Settings > Environment Variables:
 //   ANTHROPIC_API_KEY   — your Anthropic API key
 //   SUPABASE_URL        — your Supabase project URL
 //   SUPABASE_ANON_KEY   — your Supabase publishable/anon key (same one used in index.html)
@@ -50,74 +55,63 @@ async function incrementLookupUsage(token, supabaseUrl, anonKey) {
   return await res.json();
 }
 
-export async function onRequestPost(context) {
-  const { request, env } = context;
-  const jsonHeaders = { 'Content-Type': 'application/json' };
-
-  if (!env.ANTHROPIC_API_KEY || !env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
-    return new Response(
-      JSON.stringify({ error: { message: 'Server is missing ANTHROPIC_API_KEY, SUPABASE_URL, or SUPABASE_ANON_KEY. See README setup steps.' } }),
-      { status: 500, headers: jsonHeaders }
-    );
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: { message: 'Use POST' } });
+    return;
   }
 
-  const authHeader = request.headers.get('Authorization') || '';
+  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+
+  if (!ANTHROPIC_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    res.status(500).json({ error: { message: 'Server is missing ANTHROPIC_API_KEY, SUPABASE_URL, or SUPABASE_ANON_KEY. Set these in Vercel > Project Settings > Environment Variables, then redeploy.' } });
+    return;
+  }
+
+  const authHeader = req.headers['authorization'] || '';
   const token = authHeader.replace(/^Bearer\s+/i, '');
   if (!token) {
-    return new Response(
-      JSON.stringify({ error: { message: 'Not signed in.' } }),
-      { status: 401, headers: jsonHeaders }
-    );
+    res.status(401).json({ error: { message: 'Not signed in.' } });
+    return;
   }
 
-  const user = await getSupabaseUser(token, env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
-  if (!user || !user.id) {
-    return new Response(
-      JSON.stringify({ error: { message: 'Session expired or invalid — please sign in again.' } }),
-      { status: 401, headers: jsonHeaders }
-    );
-  }
-
-  const usageCount = await incrementLookupUsage(token, env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
-  if (usageCount !== null && usageCount > DAILY_LOOKUP_LIMIT) {
-    return new Response(
-      JSON.stringify({ error: { message: `Daily lookup limit reached (${DAILY_LOOKUP_LIMIT}/day). Try again tomorrow.` } }),
-      { status: 429, headers: jsonHeaders }
-    );
-  }
-
-  let body;
   try {
-    body = await request.json();
-  } catch (e) {
-    return new Response(
-      JSON.stringify({ error: { message: 'Invalid request body' } }),
-      { status: 400, headers: jsonHeaders }
-    );
+    const user = await getSupabaseUser(token, SUPABASE_URL, SUPABASE_ANON_KEY);
+    if (!user || !user.id) {
+      res.status(401).json({ error: { message: 'Session expired or invalid — please sign in again.' } });
+      return;
+    }
+
+    const usageCount = await incrementLookupUsage(token, SUPABASE_URL, SUPABASE_ANON_KEY);
+    if (usageCount !== null && usageCount > DAILY_LOOKUP_LIMIT) {
+      res.status(429).json({ error: { message: `Daily lookup limit reached (${DAILY_LOOKUP_LIMIT}/day). Try again tomorrow.` } });
+      return;
+    }
+
+    // Vercel's Node.js runtime already parses a JSON request body into
+    // req.body for us when Content-Type is application/json.
+    const body = req.body;
+    if (!body || typeof body !== 'object') {
+      res.status(400).json({ error: { message: 'Invalid request body' } });
+      return;
+    }
+
+    const upstream = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify(body)
+    });
+
+    const data = await upstream.json();
+    res.status(upstream.status).json(data);
+  } catch (err) {
+    console.error('lookup function error', err);
+    res.status(500).json({ error: { message: 'Unexpected server error — check Vercel function logs for details.' } });
   }
-
-  const upstream = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify(body)
-  });
-
-  const data = await upstream.json();
-
-  return new Response(JSON.stringify(data), {
-    status: upstream.status,
-    headers: jsonHeaders
-  });
-}
-
-// Reject other methods explicitly rather than falling through silently.
-export async function onRequestGet() {
-  return new Response(JSON.stringify({ error: { message: 'Use POST' } }), {
-    status: 405,
-    headers: { 'Content-Type': 'application/json' }
-  });
 }
