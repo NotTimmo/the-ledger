@@ -986,6 +986,44 @@ select option{
   display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr));
   gap:16px;
 }
+
+/* ---------- Achievements ---------- */
+.achievements-grid{
+  max-width:1100px; margin:20px auto 60px; padding:0 32px;
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(230px,1fr));
+  gap:14px;
+}
+.achievement-card{
+  background: var(--parchment);
+  color: var(--text-dark);
+  border-radius: 4px;
+  padding: 16px;
+  border-left: 4px solid var(--gold);
+  position: relative;
+  overflow: hidden;
+}
+.achievement-card.locked{
+  border-left-color: rgba(35,38,47,0.2);
+  opacity: 0.55;
+}
+.achievement-card.locked .achievement-icon{ filter: grayscale(1); }
+.achievement-icon{ font-size: 30px; line-height:1; margin-bottom:8px; }
+.achievement-title{ font-family:'Fraunces', serif; font-weight:600; font-size:16px; }
+.achievement-desc{ font-size:12px; color:rgba(35,38,47,0.6); margin-top:3px; line-height:1.4; }
+.achievement-progress-track{ height:6px; background:rgba(35,38,47,0.1); border-radius:3px; overflow:hidden; margin-top:10px; }
+.achievement-progress-fill{ height:100%; border-radius:3px; background:var(--gold); }
+.achievement-progress-label{ font-family:'IBM Plex Mono', monospace; font-size:10px; color:rgba(35,38,47,0.5); margin-top:5px; }
+.achievement-unlocked-badge{
+  position:absolute; top:12px; right:12px;
+  font-family:'IBM Plex Mono', monospace; font-size:9px; text-transform:uppercase; letter-spacing:0.04em;
+  background: rgba(76,154,107,0.18); color:#2E6B49; padding:3px 7px; border-radius:3px;
+}
+.achievements-cat-heading{
+  font-family:'Fraunces', serif; font-size:18px; font-weight:600; color:var(--text-light);
+  max-width:1100px; margin:26px auto 4px; padding:0 32px;
+}
+.achievements-cat-heading:first-of-type{ margin-top:0; }
+
 .stat-card{
   background: var(--parchment);
   color: var(--text-dark);
@@ -1127,6 +1165,7 @@ select option{
   <button class="nav-btn active" id="navLibrary">Library</button>
   <button class="nav-btn" id="navJournal">Journal</button>
   <button class="nav-btn" id="navStats">Dashboard</button>
+  <button class="nav-btn" id="navAchievements">Achievements</button>
 </div>
 
 <div id="libraryView">
@@ -1235,6 +1274,23 @@ select option{
   <div class="journal-totals" id="journalTotals"></div>
   <div class="journal-list" id="journalList"></div>
   <div class="journal-recent" id="journalRecentDays"></div>
+</div>
+
+<div id="achievementsView" class="stats-view hidden">
+  <div class="stats-filters">
+    <select id="achievementsCategory">
+      <option value="">All Categories</option>
+      <option value="Books">Books</option>
+      <option value="Comics">Comics</option>
+      <option value="Movies">Movies</option>
+      <option value="TV Shows">TV Shows</option>
+      <option value="Video Games">Video Games</option>
+      <option value="Overall">Overall</option>
+    </select>
+    <div class="spacer"></div>
+    <span class="lookup-status" id="achievementsSummary" style="margin:0;"></span>
+  </div>
+  <div id="achievementsGrid"></div>
 </div>
 
 <div class="overlay hidden" id="settingsOverlay">
@@ -3649,20 +3705,126 @@ document.getElementById('quickUpdateSaveBtn').addEventListener('click', async ()
   render();
 });
 
+/* ---------- Achievements ---------- */
+function countCompleted(cat){
+  return items.filter(i => i.category === cat && i.status === 'Completed').length;
+}
+
+const ACHIEVEMENTS = [
+  // Books
+  { id:'books_5', category:'Books', icon:'📖', title:'Bookworm', desc:'Complete 5 books', target:5,
+    getCurrent: () => countCompleted('Books') },
+  { id:'books_25', category:'Books', icon:'📚', title:'Bibliophile', desc:'Complete 25 books', target:25,
+    getCurrent: () => countCompleted('Books') },
+  { id:'books_100', category:'Books', icon:'🏛️', title:'Century Club', desc:'Complete 100 books', target:100,
+    getCurrent: () => countCompleted('Books') },
+  { id:'books_pages', category:'Books', icon:'📄', title:'Page Turner', desc:'Read 10,000 pages', target:10000,
+    getCurrent: () => items.filter(i => i.category === 'Books' && i.status === 'Completed').reduce((sum,i) => sum + (parseInt(i.pageCount) || 0), 0) },
+
+  // Comics
+  { id:'comics_1', category:'Comics', icon:'💥', title:'First Issue', desc:'Complete 1 comic', target:1,
+    getCurrent: () => countCompleted('Comics') },
+  { id:'comics_10', category:'Comics', icon:'📗', title:'Collector', desc:'Complete 10 comics', target:10,
+    getCurrent: () => countCompleted('Comics') },
+  { id:'comics_50', category:'Comics', icon:'🗄️', title:'Completionist', desc:'Complete 50 comics', target:50,
+    getCurrent: () => countCompleted('Comics') },
+
+  // Movies
+  { id:'movies_10', category:'Movies', icon:'🎬', title:'Movie Night', desc:'Complete 10 movies', target:10,
+    getCurrent: () => countCompleted('Movies') },
+  { id:'movies_100', category:'Movies', icon:'🍿', title:'Cinephile', desc:'Complete 100 movies', target:100,
+    getCurrent: () => countCompleted('Movies') },
+  { id:'movies_hours', category:'Movies', icon:'⏱️', title:'Marathoner', desc:'Watch 200 hours of movies', target:200,
+    getCurrent: () => Math.round(items.filter(i => i.category === 'Movies' && i.status === 'Completed').reduce((sum,i) => sum + (parseInt(i.runtime) || 0), 0) / 60) },
+
+  // TV Shows
+  { id:'tv_5', category:'TV Shows', icon:'📺', title:'Binge Watcher', desc:'Complete 5 shows', target:5,
+    getCurrent: () => countCompleted('TV Shows') },
+  { id:'tv_25', category:'TV Shows', icon:'🛋️', title:'Couch Potato', desc:'Complete 25 shows', target:25,
+    getCurrent: () => countCompleted('TV Shows') },
+
+  // Video Games
+  { id:'games_5', category:'Video Games', icon:'🎮', title:'Gamer', desc:'Complete 5 games', target:5,
+    getCurrent: () => countCompleted('Video Games') },
+  { id:'games_25', category:'Video Games', icon:'🏆', title:'Completionist', desc:'Complete 25 games', target:25,
+    getCurrent: () => countCompleted('Video Games') },
+  { id:'games_hours', category:'Video Games', icon:'⏳', title:'Grinder', desc:'Play 500 hours of games', target:500,
+    getCurrent: () => Math.round(items.filter(i => i.category === 'Video Games').reduce((sum,i) => sum + (parseFloat(i.hoursPlayed) || 0), 0)) },
+
+  // Overall
+  { id:'overall_renaissance', category:'Overall', icon:'🎭', title:'Renaissance', desc:'Complete at least one item in every category', target:5,
+    getCurrent: () => CATEGORIES.filter(c => countCompleted(c) > 0).length },
+  { id:'overall_critic', category:'Overall', icon:'⭐', title:'Critic', desc:'Rate 50 items', target:50,
+    getCurrent: () => items.filter(i => i.rating > 0).length },
+  { id:'overall_repeat', category:'Overall', icon:'⟳', title:'Repeat Customer', desc:'Log 5 rereads/rewatches/replays', target:5,
+    getCurrent: () => journalEntries.filter(e => e.isRepeat).length },
+  { id:'overall_streak7', category:'Overall', icon:'🔥', title:'On Fire', desc:'Reach a 7-day streak', target:7,
+    getCurrent: () => computeCurrentStreak() },
+  { id:'overall_streak30', category:'Overall', icon:'⚡', title:'Unstoppable', desc:'Reach a 30-day streak', target:30,
+    getCurrent: () => computeCurrentStreak() }
+];
+
+function computeAchievements(){
+  return ACHIEVEMENTS.map(a => {
+    const current = a.getCurrent();
+    return { ...a, current, unlocked: current >= a.target };
+  });
+}
+
+function renderAchievements(){
+  const all = computeAchievements();
+  const filter = document.getElementById('achievementsCategory').value;
+  const filtered = filter ? all.filter(a => a.category === filter) : all;
+
+  const unlockedCount = all.filter(a => a.unlocked).length;
+  document.getElementById('achievementsSummary').textContent = `${unlockedCount} / ${all.length} unlocked`;
+
+  const groups = filter ? [filter] : ['Books','Comics','Movies','TV Shows','Video Games','Overall'];
+
+  let html = '';
+  groups.forEach(cat => {
+    const group = filtered.filter(a => a.category === cat);
+    if(group.length === 0) return;
+    html += `<div class="achievements-cat-heading">${escapeHtml(cat)}</div><div class="achievements-grid">`;
+    html += group.map(a => {
+      const pct = Math.min(100, Math.round((a.current / a.target) * 100));
+      const currentDisplay = a.current > a.target ? a.target : a.current;
+      return `
+        <div class="achievement-card ${a.unlocked ? '' : 'locked'}">
+          ${a.unlocked ? '<span class="achievement-unlocked-badge">Unlocked</span>' : ''}
+          <div class="achievement-icon">${a.icon}</div>
+          <div class="achievement-title">${escapeHtml(a.title)}</div>
+          <div class="achievement-desc">${escapeHtml(a.desc)}</div>
+          <div class="achievement-progress-track"><div class="achievement-progress-fill" style="width:${pct}%"></div></div>
+          <div class="achievement-progress-label">${currentDisplay.toLocaleString()} / ${a.target.toLocaleString()}</div>
+        </div>
+      `;
+    }).join('');
+    html += `</div>`;
+  });
+
+  document.getElementById('achievementsGrid').innerHTML = html || '<div style="padding:0 32px; color:var(--slate); font-size:13px;">No achievements in this category yet.</div>';
+}
+document.getElementById('achievementsCategory').addEventListener('change', renderAchievements);
+
 /* ---------- Nav: Library / Journal / Stats ---------- */
 function showView(view){
   document.getElementById('libraryView').classList.toggle('hidden', view !== 'library');
   document.getElementById('journalView').classList.toggle('hidden', view !== 'journal');
   document.getElementById('statsView').classList.toggle('hidden', view !== 'stats');
+  document.getElementById('achievementsView').classList.toggle('hidden', view !== 'achievements');
   document.getElementById('navLibrary').classList.toggle('active', view === 'library');
   document.getElementById('navJournal').classList.toggle('active', view === 'journal');
   document.getElementById('navStats').classList.toggle('active', view === 'stats');
+  document.getElementById('navAchievements').classList.toggle('active', view === 'achievements');
   if(view === 'journal') renderJournal();
   if(view === 'stats') renderStats();
+  if(view === 'achievements') renderAchievements();
 }
 document.getElementById('navLibrary').addEventListener('click', ()=> showView('library'));
 document.getElementById('navJournal').addEventListener('click', ()=> showView('journal'));
 document.getElementById('navStats').addEventListener('click', ()=> showView('stats'));
+document.getElementById('navAchievements').addEventListener('click', ()=> showView('achievements'));
 
 /* ---------- View mode: Grid / List / Covers ---------- */
 function setViewMode(mode){
