@@ -26,6 +26,24 @@
   window.RAWG_API_KEY = "85aaa53561834e19bbac21190d74bb4a";
   // ===============================================================
 
+  // ====== OPTIONAL but strongly recommended — Google Books key ======
+  // Without a key, Google Books shares one small global quota across
+  // every app that calls it keyless, which fills up fast and returns 429
+  // "Too Many Requests" — this covers book covers/metadata everywhere in
+  // the app (Look up, ISBN auto-fill, broken-cover recovery). A free key
+  // (no payment info needed) raises this to 1,000 requests/day just for
+  // this app. Get one at console.cloud.google.com — see README.
+  window.GOOGLE_BOOKS_API_KEY = "AIzaSyD5EvPAakyipmLeRoYuJ2VPZyr6KkyYzCg";
+  // ===================================================================
+
+  // ====== OPTIONAL — needed for "Paste a Link" with IMDb URLs ======
+  // Get a free key at omdbapi.com/apikey.aspx (email signup, no payment
+  // info). Free tier is 1,000 requests/day. This is what turns an IMDb
+  // link into a director/runtime/poster/plot lookup by ID — reliable,
+  // since it doesn't depend on guessing a title from the URL.
+  window.OMDB_API_KEY = "bbff6087";
+  // ===================================================================
+
   // ====== DEV MODE — set to false before deploying for real ======
   // While true, the login screen is skipped entirely and the app saves
   // to this browser's localStorage instead of Supabase, so you can keep
@@ -1589,6 +1607,13 @@ select option{
       </div>
       <button class="lookup-btn" id="lookupBtn" type="button">⌕ Look up</button>
     </div>
+    <div class="title-row" style="margin-top:8px;">
+      <div class="field">
+        <label>Or Paste a Link</label>
+        <input type="text" id="f_linkPaste" placeholder="e.g. a Goodreads, IMDb, RAWG, or Comic Vine page URL">
+      </div>
+      <button class="lookup-btn" id="linkLookupBtn" type="button">⇩ Fetch from Link</button>
+    </div>
     <p class="lookup-status" id="lookupStatus"></p>
     <p class="lookup-status hidden" id="duplicateWarning" style="color:var(--rust);"></p>
     <div class="lookup-results hidden" id="lookupResults"></div>
@@ -2257,12 +2282,19 @@ function render(){
   wireSectionInteractions();
 }
 
+// Appends &key=... when a Google Books API key is configured, or nothing
+// otherwise — keeps every call site simple regardless of whether one's
+// been set up yet.
+function googleBooksKeyParam(){
+  return window.GOOGLE_BOOKS_API_KEY ? `&key=${encodeURIComponent(window.GOOGLE_BOOKS_API_KEY)}` : '';
+}
+
 async function fetchGoogleBooksCover(item){
   try{
     const q = item.isbn
       ? `isbn:${item.isbn}`
       : `intitle:${item.title}${item.creator ? '+inauthor:' + item.creator : ''}`;
-    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=1`);
+    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=1${googleBooksKeyParam()}`);
     if(!res.ok) return null;
     const data = await res.json();
     const links = data && data.items && data.items[0] && data.items[0].volumeInfo && data.items[0].volumeInfo.imageLinks;
@@ -3020,7 +3052,7 @@ async function fetchItunesCover(title, mediaType){
 // call at all, so this costs nothing regardless of how often it's used.
 async function lookupGoogleBooksFree(title){
   try{
-    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent('intitle:' + title)}&maxResults=2`);
+    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent('intitle:' + title)}&maxResults=2${googleBooksKeyParam()}`);
     if(!res.ok) return [];
     const data = await res.json();
     if(!Array.isArray(data.items)) return [];
@@ -3125,14 +3157,16 @@ async function lookupRawgFree(title){
 // this can't be called client-side — it goes through the same serverless
 // function that already proxies the Anthropic API, just with a different
 // request shape it recognizes and routes differently on the server.
-async function lookupComicVineFree(title){
+// Pass an `id` (the "4050-12345" style ID from a comicvine.gamespot.com
+// URL) for a precise single-volume fetch, or a `title` to search instead.
+async function lookupComicVineFree(title, id){
   try{
     const sessionRes = await supabaseClient.auth.getSession();
     const token = sessionRes && sessionRes.data && sessionRes.data.session ? sessionRes.data.session.access_token : '';
     const res = await fetch('/api/lookup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ provider: 'comicvine', query: title })
+      body: JSON.stringify(id ? { provider: 'comicvine', id } : { provider: 'comicvine', query: title })
     });
     if(!res.ok) return [];
     const data = await res.json();
@@ -3142,6 +3176,219 @@ async function lookupComicVineFree(title){
     return [];
   }
 }
+
+// Fetches one specific game by its RAWG slug (from a rawg.io/games/{slug}
+// URL) — used by "Paste a Link". More precise than a text search since
+// it's the exact game linked, not a guess.
+async function lookupRawgBySlug(slug){
+  if(!window.RAWG_API_KEY){
+    console.warn('RAWG_API_KEY is not set — see the config block near the top of index.html.');
+    return [];
+  }
+  try{
+    const res = await fetch(`https://api.rawg.io/api/games/${encodeURIComponent(slug)}?key=${encodeURIComponent(window.RAWG_API_KEY)}`);
+    if(!res.ok) return [];
+    const d = await res.json();
+    if(!d || !d.id) return [];
+    const year = d.released ? d.released.slice(0, 4) : '';
+    let description = (d.description_raw || '').replace(/\r?\n+/g, ' ').trim();
+    if(description.length > 140) description = description.slice(0, 137) + '…';
+    const developers = Array.isArray(d.developers) ? d.developers.map(x => x.name).join(', ') : '';
+    return [{
+      title: d.name || slug,
+      creator: developers,
+      year,
+      coverImageUrl: d.background_image || null,
+      description
+    }];
+  }catch(e){
+    console.error('RAWG by-slug lookup failed', e);
+    return [];
+  }
+}
+
+// Fetches one specific title by IMDb ID via OMDb (needs a free key — see
+// the window.OMDB_API_KEY config near the top of this file). Used by
+// "Paste a Link" for imdb.com URLs. Returns the detected media type too
+// ("movie" or "series"), so the category dropdown can be set automatically.
+async function lookupOmdbById(imdbId){
+  if(!window.OMDB_API_KEY){
+    console.warn('OMDB_API_KEY is not set — see the config block near the top of index.html.');
+    return null;
+  }
+  try{
+    const res = await fetch(`https://www.omdbapi.com/?i=${encodeURIComponent(imdbId)}&apikey=${encodeURIComponent(window.OMDB_API_KEY)}`);
+    if(!res.ok) return null;
+    const d = await res.json();
+    if(!d || d.Response === 'False') return null;
+    const runtimeMatch = (d.Runtime || '').match(/(\d+)/);
+    return {
+      match: {
+        title: d.Title || '',
+        creator: (d.Director && d.Director !== 'N/A') ? d.Director : '',
+        year: (d.Year || '').slice(0, 4),
+        coverImageUrl: (d.Poster && d.Poster !== 'N/A') ? d.Poster : null,
+        description: (d.Plot && d.Plot !== 'N/A') ? d.Plot : '',
+        runtime: runtimeMatch ? parseInt(runtimeMatch[1]) : null
+      },
+      mediaType: d.Type === 'series' ? 'TV Shows' : 'Movies'
+    };
+  }catch(e){
+    console.error('OMDb lookup failed', e);
+    return null;
+  }
+}
+
+// Last-resort fallback for a link from a site we don't specifically
+// recognize: take a guess at the title from the last URL path segment.
+// This is genuinely just a guess, not a real lookup — communicated as
+// such in performLinkLookup below.
+function extractTitleGuessFromUrl(url){
+  try{
+    const u = new URL(url);
+    const segments = u.pathname.split('/').filter(Boolean);
+    let last = segments[segments.length - 1] || '';
+    last = decodeURIComponent(last);
+    last = last.replace(/\.(html?|php|aspx?)$/i, '');
+    last = last.replace(/^\d+[\.\-_]?/, ''); // strip a leading numeric ID
+    last = last.replace(/[\-_.+]+/g, ' ').trim();
+    return last;
+  }catch(e){
+    return '';
+  }
+}
+
+async function performLinkLookup(){
+  const urlInput = document.getElementById('f_linkPaste');
+  const rawUrl = urlInput.value.trim();
+  const statusEl = document.getElementById('lookupStatus');
+  const resultsEl = document.getElementById('lookupResults');
+  const btn = document.getElementById('linkLookupBtn');
+
+  if(!rawUrl){
+    statusEl.textContent = 'Paste a link first.';
+    return;
+  }
+
+  let parsed;
+  try{ parsed = new URL(rawUrl); }catch(e){
+    statusEl.textContent = 'That doesn\'t look like a valid URL.';
+    return;
+  }
+
+  btn.disabled = true;
+  resultsEl.classList.add('hidden');
+  resultsEl.innerHTML = '';
+  const host = parsed.hostname.replace(/^www\./, '');
+
+  try{
+    // Goodreads: no public API, so this extracts the title from the
+    // URL's own slug (e.g. "77566.Hyperion" -> "Hyperion") and runs it
+    // through the same free Google Books search Look up already uses.
+    // This is a best-effort guess from the URL text, not a real scrape
+    // of the page — Goodreads titles in the slug are usually clean, but
+    // edition/series info sometimes tags along.
+    if(host === 'goodreads.com'){
+      statusEl.textContent = 'Reading title from Goodreads link…';
+      const match = parsed.pathname.match(/\/show\/\d+[.\-_]?(.+)/);
+      const guess = match ? match[1].replace(/[\-_]+/g, ' ').replace(/\.\w+$/, '').trim() : extractTitleGuessFromUrl(rawUrl);
+      document.getElementById('f_category').value = 'Books';
+      toggleBookFields();
+      checkDuplicateWarning();
+      const matches = await lookupGoogleBooksFree(guess);
+      if(matches.length === 0) statusEl.textContent = `No matches found for "${guess}" (guessed from the link) — try Look up by title instead.`;
+      else renderLookupResults(matches, guess, true);
+      return;
+    }
+
+    // IMDb: reliable, since we're looking up by their own ID rather than
+    // guessing a title — the URL contains an opaque "tt1234567" ID with
+    // no readable title in it at all, so a real ID-based API is required.
+    if(host === 'imdb.com'){
+      statusEl.textContent = 'Looking up IMDb link…';
+      const idMatch = parsed.pathname.match(/\/title\/(tt\d+)/);
+      if(!idMatch){
+        statusEl.textContent = 'Couldn\'t find an IMDb title ID in that link.';
+        return;
+      }
+      if(!window.OMDB_API_KEY){
+        statusEl.textContent = 'IMDb links need a free OMDb API key — see the config block near the top of index.html (README has setup steps).';
+        return;
+      }
+      const result = await lookupOmdbById(idMatch[1]);
+      if(!result){
+        statusEl.textContent = 'No match found for that IMDb link.';
+        return;
+      }
+      document.getElementById('f_category').value = result.mediaType;
+      toggleBookFields();
+      checkDuplicateWarning();
+      renderLookupResults([result.match], result.match.title, false);
+      return;
+    }
+
+    // RAWG: precise, since the URL's own slug is RAWG's real identifier
+    // for the game, not a guess.
+    if(host === 'rawg.io'){
+      statusEl.textContent = 'Looking up RAWG link…';
+      const slugMatch = parsed.pathname.match(/\/games\/([^/]+)/);
+      if(!slugMatch){
+        statusEl.textContent = 'Couldn\'t find a game slug in that link.';
+        return;
+      }
+      document.getElementById('f_category').value = 'Video Games';
+      toggleBookFields();
+      checkDuplicateWarning();
+      const matches = await lookupRawgBySlug(slugMatch[1]);
+      if(matches.length === 0) statusEl.textContent = 'No match found for that RAWG link.';
+      else renderLookupResults(matches, slugMatch[1], false);
+      return;
+    }
+
+    // Comic Vine: precise, since the URL's own resource ID (e.g.
+    // "4050-12345") identifies the exact volume, not a guess.
+    if(host === 'comicvine.gamespot.com'){
+      statusEl.textContent = 'Looking up Comic Vine link…';
+      const idMatch = parsed.pathname.match(/(\d{4}-\d+)/);
+      if(!idMatch){
+        statusEl.textContent = 'Couldn\'t find a Comic Vine volume ID in that link.';
+        return;
+      }
+      document.getElementById('f_category').value = 'Comics';
+      toggleBookFields();
+      checkDuplicateWarning();
+      const matches = await lookupComicVineFree(null, idMatch[1]);
+      if(matches.length === 0) statusEl.textContent = 'No match found for that Comic Vine link.';
+      else renderLookupResults(matches, idMatch[1], false);
+      return;
+    }
+
+    // Unrecognized site: best-effort title guess from the URL, searched
+    // through whichever free source matches the currently-selected
+    // category. Clearly weaker than the domain-specific paths above —
+    // said so in the status message rather than presenting it as reliable.
+    const guess = extractTitleGuessFromUrl(rawUrl);
+    if(!guess){
+      statusEl.textContent = 'Couldn\'t guess a title from that link — try Look up by title instead.';
+      return;
+    }
+    statusEl.textContent = `Unrecognized site — guessing title "${guess}" from the link and searching…`;
+    const category = document.getElementById('f_category').value;
+    let matches = [];
+    if(category === 'Books') matches = await lookupGoogleBooksFree(guess);
+    else if(category === 'Movies' || category === 'TV Shows') matches = await lookupItunesFree(guess, category === 'TV Shows' ? 'tvShow' : 'movie');
+    else if(category === 'Video Games') matches = await lookupRawgFree(guess);
+    else if(category === 'Comics') matches = await lookupComicVineFree(guess);
+    if(matches.length === 0) statusEl.textContent = `No matches found for guessed title "${guess}" — try Look up by title instead.`;
+    else renderLookupResults(matches, guess, category === 'Books');
+  }catch(e){
+    console.error('Link lookup failed', e);
+    statusEl.textContent = 'Something went wrong reading that link. Check your connection and try again.';
+  }finally{
+    btn.disabled = false;
+  }
+}
+document.getElementById('linkLookupBtn').addEventListener('click', performLinkLookup);
 
 async function performLookup(){
   const title = document.getElementById('f_title').value.trim();
