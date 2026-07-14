@@ -18,6 +18,14 @@
   window.SUPABASE_ANON_KEY = "sb_publishable_nUZDqRRwVYxKmMFzp3tb9g_oN6TEQGs";
   // =========================================================
 
+  // ====== OPTIONAL — free Video Games lookup (see README) ======
+  // Get a free key at rawg.io/apidocs (no payment info needed, just an
+  // email). Safe to leave visible in the browser like this — RAWG has no
+  // billing, so there's no cost risk if it's ever seen/copied, only a
+  // shared rate limit (20,000 requests/month on the free tier).
+  window.RAWG_API_KEY = "85aaa53561834e19bbac21190d74bb4a";
+  // ===============================================================
+
   // ====== DEV MODE — set to false before deploying for real ======
   // While true, the login screen is skipped entirely and the app saves
   // to this browser's localStorage instead of Supabase, so you can keep
@@ -3008,6 +3016,133 @@ async function fetchItunesCover(title, mediaType){
   }
 }
 
+// Free, keyless lookup for Books — returns up to 2 matches with no AI
+// call at all, so this costs nothing regardless of how often it's used.
+async function lookupGoogleBooksFree(title){
+  try{
+    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent('intitle:' + title)}&maxResults=2`);
+    if(!res.ok) return [];
+    const data = await res.json();
+    if(!Array.isArray(data.items)) return [];
+    return data.items.slice(0, 2).map(item => {
+      const v = item.volumeInfo || {};
+      const year = v.publishedDate ? v.publishedDate.slice(0, 4) : '';
+      const rawCover = v.imageLinks && (v.imageLinks.thumbnail || v.imageLinks.smallThumbnail);
+      let description = (v.description || '').replace(/<[^>]+>/g, '').trim();
+      if(description.length > 140) description = description.slice(0, 137) + '…';
+      return {
+        title: v.title || title,
+        creator: Array.isArray(v.authors) ? v.authors.join(', ') : '',
+        year,
+        coverImageUrl: rawCover ? rawCover.replace(/^http:/, 'https:') : null,
+        description,
+        pageCount: v.pageCount || null,
+        publishDate: v.publishedDate || null
+      };
+    });
+  }catch(e){
+    console.error('Google Books lookup failed', e);
+    return [];
+  }
+}
+
+// Free, keyless lookup for Movies/TV — same idea, via iTunes. Note: iTunes
+// doesn't reliably expose a director/creator field, so that's left blank
+// here for the person to fill in by hand if they want it.
+async function lookupItunesFree(title, mediaType){
+  try{
+    const entity = mediaType === 'tvShow' ? 'tvShow' : 'movie';
+    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(title)}&media=${entity}&entity=${entity}&limit=2`);
+    if(!res.ok) return [];
+    const data = await res.json();
+    if(!Array.isArray(data.results)) return [];
+    return data.results.slice(0, 2).map(r => {
+      const year = r.releaseDate ? r.releaseDate.slice(0, 4) : '';
+      const art = r.artworkUrl100 ? r.artworkUrl100.replace(/\d+x\d+bb\.(jpg|png)/, '600x600bb.$1').replace(/^http:/, 'https:') : null;
+      const runtimeMinutes = r.trackTimeMillis ? Math.round(r.trackTimeMillis / 60000) : null;
+      let description = (r.longDescription || r.shortDescription || '').trim();
+      if(description.length > 140) description = description.slice(0, 137) + '…';
+      return {
+        title: r.trackName || title,
+        creator: '',
+        year,
+        coverImageUrl: art,
+        description,
+        runtime: runtimeMinutes
+      };
+    });
+  }catch(e){
+    console.error('iTunes lookup failed', e);
+    return [];
+  }
+}
+
+// Free lookup for Video Games via RAWG (needs a free API key — see the
+// window.RAWG_API_KEY config near the top of this file). The search
+// endpoint alone doesn't reliably include developer/description, so each
+// candidate needs one extra detail request.
+async function lookupRawgFree(title){
+  if(!window.RAWG_API_KEY){
+    console.warn('RAWG_API_KEY is not set — see the config block near the top of index.html.');
+    return [];
+  }
+  try{
+    const res = await fetch(`https://api.rawg.io/api/games?key=${encodeURIComponent(window.RAWG_API_KEY)}&search=${encodeURIComponent(title)}&page_size=2`);
+    if(!res.ok) return [];
+    const data = await res.json();
+    if(!Array.isArray(data.results)) return [];
+    const candidates = data.results.slice(0, 2);
+
+    const details = await Promise.all(candidates.map(async g => {
+      try{
+        const dRes = await fetch(`https://api.rawg.io/api/games/${g.id}?key=${encodeURIComponent(window.RAWG_API_KEY)}`);
+        return dRes.ok ? await dRes.json() : null;
+      }catch(e){ return null; }
+    }));
+
+    return candidates.map((g, idx) => {
+      const d = details[idx];
+      const year = g.released ? g.released.slice(0, 4) : '';
+      let description = (d && d.description_raw) ? d.description_raw.replace(/\r?\n+/g, ' ').trim() : '';
+      if(description.length > 140) description = description.slice(0, 137) + '…';
+      const developers = (d && Array.isArray(d.developers)) ? d.developers.map(x => x.name).join(', ') : '';
+      return {
+        title: g.name || title,
+        creator: developers,
+        year,
+        coverImageUrl: g.background_image || null,
+        description
+      };
+    });
+  }catch(e){
+    console.error('RAWG lookup failed', e);
+    return [];
+  }
+}
+
+// Free lookup for Comics via Comic Vine. Unlike the other free APIs here,
+// Comic Vine's API blocks direct browser requests (no CORS support), so
+// this can't be called client-side — it goes through the same serverless
+// function that already proxies the Anthropic API, just with a different
+// request shape it recognizes and routes differently on the server.
+async function lookupComicVineFree(title){
+  try{
+    const sessionRes = await supabaseClient.auth.getSession();
+    const token = sessionRes && sessionRes.data && sessionRes.data.session ? sessionRes.data.session.access_token : '';
+    const res = await fetch('/api/lookup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ provider: 'comicvine', query: title })
+    });
+    if(!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.matches) ? data.matches : [];
+  }catch(e){
+    console.error('Comic Vine lookup failed', e);
+    return [];
+  }
+}
+
 async function performLookup(){
   const title = document.getElementById('f_title').value.trim();
   const category = document.getElementById('f_category').value;
@@ -3020,84 +3155,40 @@ async function performLookup(){
     return;
   }
 
-  const remaining = lookupCooldownUntil - Date.now();
-  if(remaining > 0){
-    statusEl.textContent = `Please wait ${Math.ceil(remaining/1000)}s before looking up again.`;
-    return;
-  }
+  const isBook = category === 'Books';
+  const isMovie = category === 'Movies';
+  const isTV = category === 'TV Shows';
+  const isGame = category === 'Video Games';
+  const isComic = category === 'Comics';
 
+  // Every category now has a free, no-AI-cost source: Google Books, iTunes,
+  // RAWG, or Comic Vine (the last one via a small server proxy, since its
+  // API blocks direct browser requests — see lookupComicVineFree above).
+  // "Look up" no longer calls Claude at all, so there's no ongoing AI cost
+  // from using this feature, regardless of how often it's used.
+  const sourceLabel = isBook ? 'Google Books' : (isGame ? 'RAWG' : (isComic ? 'Comic Vine' : 'iTunes'));
   btn.disabled = true;
   resultsEl.classList.add('hidden');
   resultsEl.innerHTML = '';
-
-  const isBook = category === 'Books';
+  statusEl.textContent = `Searching ${sourceLabel}…`;
 
   try{
-    // No free public API exists for any remaining category, so steer
-    // Claude's web search toward the requested site rather than scraping it.
-    statusEl.textContent = `Searching ${SITE_HINT[category] || 'the web'}…`;
-    const creatorLabel = CREATOR_LABEL[category] || 'creator';
-    const siteHint = SITE_HINT[category];
-    const isMovie = category === 'Movies';
-    const bookFieldsSpec = isBook ? `, "pageCount":<number or null>, "publishDate":"<original publish date, e.g. YYYY-MM-DD or Month YYYY, or null>"` : '';
-    const movieFieldsSpec = isMovie ? `, "runtime":<runtime in minutes as a number, or null>` : '';
-    const bookAsk = isBook ? ', the page count, and the original publishing date' : '';
-    const movieAsk = isMovie ? ', and the runtime in minutes' : '';
-    const prompt = `Search primarily on ${siteHint} (use a site:${siteHint} search if it helps) for the ${category} titled "${title}". Identify up to 2 real, distinct works that plausibly match this title (there may be only one). For each, find the ${creatorLabel}, the original release year${bookAsk}${movieAsk}, a direct URL to a cover or poster image from a public source if you can find one (or null if none found), and a short description in your own words (max 18 words, no quoted text). Respond with ONLY a raw JSON array, no markdown fences, no preamble, no commentary. Format exactly: [{"title":"...","creator":"...","year":"...","coverImageUrl":"..." or null,"description":"..."${bookFieldsSpec}${movieFieldsSpec}}]. If you find no plausible match, respond with exactly: []`;
-
-    // Haiku is dramatically cheaper than Sonnet and handles this kind of
-    // short structured-extraction task just as well — no need for a
-    // larger model here. max_uses caps how many searches a single lookup
-    // can run (otherwise an ambiguous title could trigger several), and
-    // max_tokens is trimmed to match the smaller 2-match response size.
-    const data = await callClaudeAPI({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 700,
-      messages: [{ role: "user", content: prompt }],
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }]
-    });
-
-    const textBlocks = (data.content || []).filter(b => b.type === 'text').map(b => b.text);
-    const rawText = textBlocks.join('\n').trim();
-    const cleaned = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-
     let matches = [];
-    try{
-      matches = JSON.parse(cleaned);
-    }catch(parseErr){
-      const match = cleaned.match(/\[[\s\S]*\]/);
-      if(match) matches = JSON.parse(match[0]);
-    }
+    if(isBook) matches = await lookupGoogleBooksFree(title);
+    else if(isMovie || isTV) matches = await lookupItunesFree(title, isTV ? 'tvShow' : 'movie');
+    else if(isGame) matches = await lookupRawgFree(title);
+    else if(isComic) matches = await lookupComicVineFree(title);
 
-    // IMDb-adjacent poster sites (impawards, etc.) usually block hotlinking
-    // even when the AI finds a genuinely correct URL, so an AI-guessed cover
-    // for Movies/TV is unreliable. iTunes has a free, keyless API that
-    // actually works — prefer it, and drop the AI's guess entirely if
-    // iTunes doesn't have a match, rather than leave a URL that looks
-    // right but won't ever display.
-    if(Array.isArray(matches) && (category === 'Movies' || category === 'TV Shows')){
-      const mediaType = category === 'TV Shows' ? 'tvShow' : 'movie';
-      await Promise.all(matches.map(async m => {
-        m.coverImageUrl = await fetchItunesCover(m.title || title, mediaType);
-      }));
+    if(matches.length === 0){
+      statusEl.textContent = 'No matches found there — try a more specific title, or fill in the details by hand.';
+    } else {
+      renderLookupResults(matches, title, isBook);
     }
-
-    lookupRateLimitStreak = 0;
-    renderLookupResults(matches, title, isBook);
   }catch(e){
     console.error('Lookup failed', e);
-    const msg = (e && e.message) ? e.message : '';
-    if(/rate limit/i.test(msg)){
-      const waitMs = RATE_LIMIT_BACKOFF_MS[Math.min(lookupRateLimitStreak, RATE_LIMIT_BACKOFF_MS.length - 1)];
-      lookupRateLimitStreak++;
-      lookupCooldownUntil = Date.now() + waitMs;
-      startLookupCooldownCountdown();
-      return; // countdown handler manages the button + status text from here
-    } else {
-      statusEl.textContent = msg || 'Lookup failed. Check your connection and try again.';
-    }
+    statusEl.textContent = 'Lookup failed. Check your connection and try again.';
   }finally{
-    if(Date.now() >= lookupCooldownUntil) btn.disabled = false;
+    btn.disabled = false;
   }
 }
 

@@ -12,16 +12,23 @@
 // 'edge' }`), but Vercel deprecated that product in June 2025 in favor of
 // Node.js as the default for everything, so that's been removed here.
 //
-// Logic is identical to the Cloudflare version: keeps the Anthropic API
-// key server-side, requires a valid Supabase session, and caps each user
-// to a fixed number of lookups per day so one account can't run up your
-// shared Anthropic bill.
+// This endpoint now handles two different things, told apart by the
+// request body shape:
+//   1. { provider: 'comicvine', query: '...' } — free Comics lookup.
+//      Comic Vine's API blocks direct browser requests (no CORS support),
+//      so it has to be proxied server-side like this even though it's
+//      free and needs no per-user rate limiting.
+//   2. Anything else — the original Anthropic "Look up" proxy, for
+//      whatever's left that doesn't have a free API (kept here in case
+//      it's ever needed again, but nothing in the app currently calls it,
+//      since every category now has a free source).
 //
-// Requires the same three environment variables, set in Vercel under
-// Project Settings > Environment Variables:
-//   ANTHROPIC_API_KEY   — your Anthropic API key
+// Requires these environment variables, set in Vercel under Project
+// Settings > Environment Variables:
 //   SUPABASE_URL        — your Supabase project URL
 //   SUPABASE_ANON_KEY   — your Supabase publishable/anon key (same one used in index.html)
+//   ANTHROPIC_API_KEY   — only needed if the Anthropic path is ever used again
+//   COMICVINE_API_KEY   — free key from comicvine.gamespot.com/api — only needed for Comics lookups
 
 const DAILY_LOOKUP_LIMIT = 100;
 
@@ -55,18 +62,40 @@ async function incrementLookupUsage(token, supabaseUrl, anonKey) {
   return await res.json();
 }
 
+async function searchComicVine(query, apiKey) {
+  const url = `https://comicvine.gamespot.com/api/search/?api_key=${encodeURIComponent(apiKey)}&format=json&resources=volume&query=${encodeURIComponent(query)}&field_list=name,start_year,publisher,image,deck,description&limit=2`;
+  // Comic Vine asks every client to send a real User-Agent, or it may
+  // reject the request.
+  const res = await fetch(url, { headers: { 'User-Agent': 'TheLedger/1.0 (personal media tracker)' } });
+  if (!res.ok) return [];
+  const data = await res.json();
+  if (!Array.isArray(data.results)) return [];
+
+  return data.results.map(r => {
+    const rawDesc = (r.deck || r.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const description = rawDesc.length > 140 ? rawDesc.slice(0, 137) + '…' : rawDesc;
+    const cover = r.image && (r.image.medium_url || r.image.original_url || r.image.small_url);
+    return {
+      title: r.name || query,
+      creator: (r.publisher && r.publisher.name) || '',
+      year: r.start_year || '',
+      coverImageUrl: cover || null,
+      description
+    };
+  });
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: { message: 'Use POST' } });
     return;
   }
 
-  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
-  if (!ANTHROPIC_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    res.status(500).json({ error: { message: 'Server is missing ANTHROPIC_API_KEY, SUPABASE_URL, or SUPABASE_ANON_KEY. Set these in Vercel > Project Settings > Environment Variables, then redeploy.' } });
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    res.status(500).json({ error: { message: 'Server is missing SUPABASE_URL or SUPABASE_ANON_KEY. Set these in Vercel > Project Settings > Environment Variables, then redeploy.' } });
     return;
   }
 
@@ -77,6 +106,12 @@ export default async function handler(req, res) {
     return;
   }
 
+  const body = req.body;
+  if (!body || typeof body !== 'object') {
+    res.status(400).json({ error: { message: 'Invalid request body' } });
+    return;
+  }
+
   try {
     const user = await getSupabaseUser(token, SUPABASE_URL, SUPABASE_ANON_KEY);
     if (!user || !user.id) {
@@ -84,17 +119,28 @@ export default async function handler(req, res) {
       return;
     }
 
-    const usageCount = await incrementLookupUsage(token, SUPABASE_URL, SUPABASE_ANON_KEY);
-    if (usageCount !== null && usageCount > DAILY_LOOKUP_LIMIT) {
-      res.status(429).json({ error: { message: `Daily lookup limit reached (${DAILY_LOOKUP_LIMIT}/day). Try again tomorrow.` } });
+    // ---- Path 1: free Comic Vine lookup (no cost, no rate limiting needed) ----
+    if (body.provider === 'comicvine') {
+      const COMICVINE_API_KEY = process.env.COMICVINE_API_KEY;
+      if (!COMICVINE_API_KEY) {
+        res.status(500).json({ error: { message: 'Server is missing COMICVINE_API_KEY. Get a free key at comicvine.gamespot.com/api and add it in Vercel > Project Settings > Environment Variables.' } });
+        return;
+      }
+      const matches = await searchComicVine(body.query || '', COMICVINE_API_KEY);
+      res.status(200).json({ matches });
       return;
     }
 
-    // Vercel's Node.js runtime already parses a JSON request body into
-    // req.body for us when Content-Type is application/json.
-    const body = req.body;
-    if (!body || typeof body !== 'object') {
-      res.status(400).json({ error: { message: 'Invalid request body' } });
+    // ---- Path 2: Anthropic proxy (kept for compatibility, unused by the app currently) ----
+    const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+    if (!ANTHROPIC_API_KEY) {
+      res.status(500).json({ error: { message: 'Server is missing ANTHROPIC_API_KEY.' } });
+      return;
+    }
+
+    const usageCount = await incrementLookupUsage(token, SUPABASE_URL, SUPABASE_ANON_KEY);
+    if (usageCount !== null && usageCount > DAILY_LOOKUP_LIMIT) {
+      res.status(429).json({ error: { message: `Daily lookup limit reached (${DAILY_LOOKUP_LIMIT}/day). Try again tomorrow.` } });
       return;
     }
 

@@ -9,22 +9,40 @@ of them, protected by an email/password login.
 - **The app itself** (`index.html`) — unchanged from the version you've been
   using, except for the login screen and the storage/lookup wiring described
   below.
-- **Supabase** — holds user accounts (email/password), your library data,
-  and a small usage-tracking table for rate limiting (all locked down so
-  each person can only ever see their own rows).
+- **Supabase** — holds user accounts (email/password) and your library data
+  (all locked down so each person can only ever see their own rows).
+- **"Look up" costs nothing to run.** Every category now pulls from a free,
+  official source instead of an AI web search — Google Books, iTunes, RAWG,
+  and Comic Vine. See "Look up sources" below for the full breakdown and
+  what each one needs.
 - **Cloudflare Pages or Vercel** — hosts the site itself, and also runs a small
-  serverless function that proxies the "Look up" feature's API calls, keeping
-  your Anthropic API key private on the server. This repo includes **both**
-  a Cloudflare version (`functions/api/lookup.js`) and a Vercel version
-  (`api/lookup.js`) — each platform only recognizes its own folder, so
-  having both here is harmless; you only need the one matching wherever
-  you actually deploy.
+  serverless function that proxies the Comic Vine part of "Look up" (Comic
+  Vine's API blocks direct browser requests, so it needs a small server-side
+  relay — nothing costs anything, it's just a routing requirement). This repo
+  includes **both** a Cloudflare version (`functions/api/lookup.js`) and a
+  Vercel version (`api/lookup.js`) — each platform only recognizes its own
+  folder, so having both here is harmless; you only need the one matching
+  wherever you actually deploy.
 - **`manifest.json` / `sw.js` / `icons/`** — makes the site installable as a
   Progressive Web App (an actual home-screen icon on phones/tablets, opens
   in its own window without browser chrome).
 
 Everything else — sections, view modes, journal, dashboard, imports,
 exports, bulk select, duplicate detection — works exactly as before.
+
+## Look up sources
+
+| Category | Source | Needs a key? |
+|---|---|---|
+| Books | Google Books API | No |
+| Movies / TV Shows | iTunes Search API | No |
+| Video Games | RAWG.io | Yes — free, client-side (see Step 3) |
+| Comics | Comic Vine | Yes — free, server-side (see Step 5) |
+
+None of these have any billing risk — RAWG and Comic Vine are both free
+tiers with a request-count cap, not a dollar cap, so the worst case if the
+cap is ever hit is that lookups for that category stop working until the
+next day/month, never an unexpected bill.
 
 ---
 
@@ -61,6 +79,7 @@ when your project was created — they work the same way here).
    window.SUPABASE_URL = "https://your-project.supabase.co";
    window.SUPABASE_ANON_KEY = "your-publishable-or-anon-key";
    ```
+5. While you're in there: get a free RAWG key at [rawg.io/apidocs](https://rawg.io/apidocs) (email signup, no payment info) and fill in `window.RAWG_API_KEY = "...";` a few lines below — this powers the free Video Games lookup. Safe to leave visible in this file, since RAWG has no billing risk.
 
 ### Step 4 — Turn off email confirmation (optional, but simpler)
 
@@ -81,15 +100,19 @@ that case with a "check your email" message after signup.
 2. In [Cloudflare Pages](https://pages.cloudflare.com), create a new project connected to that repo.
 3. Build settings: **no build command needed** — this is a static site. Leave the build command blank and set the output directory to `/` (the repo root).
 4. Before deploying, go to your Pages project's **Settings → Environment variables** and add:
-   - `ANTHROPIC_API_KEY` — your key from [console.anthropic.com](https://console.anthropic.com)
    - `SUPABASE_URL` — the same Project URL from Step 3
    - `SUPABASE_ANON_KEY` — the same Publishable/anon key from Step 3
+   - `COMICVINE_API_KEY` — free key from [comicvine.gamespot.com/api](https://comicvine.gamespot.com/api/) (email signup, no payment info) — powers the free Comics lookup
+   - `ANTHROPIC_API_KEY` — only needed if you want the old AI-based lookup available as a fallback; nothing in the app currently calls it, since every category now has a free source
 5. Deploy. Cloudflare will give you a `*.pages.dev` URL — that's your site. It'll use `functions/api/lookup.js` automatically.
 
 **Vercel (alternative):**
 1. Push this folder to a GitHub repository.
 2. In [Vercel](https://vercel.com), import that repo as a new project. No framework preset needed — it's a static site with one API route.
-3. Before deploying, go to the project's **Settings → Environment Variables** and add the same three: `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`.
+3. Before deploying, go to the project's **Settings → Environment Variables** and add:
+   - `SUPABASE_URL`, `SUPABASE_ANON_KEY` — same as Step 3
+   - `COMICVINE_API_KEY` — free key from [comicvine.gamespot.com/api](https://comicvine.gamespot.com/api/) — powers the free Comics lookup
+   - `ANTHROPIC_API_KEY` — optional, only needed for the unused AI-lookup fallback
 4. Deploy. Vercel will give you a `*.vercel.app` URL. It'll use `api/lookup.js` automatically — Vercel maps any file under `/api` at the repo root to a matching endpoint with no extra config. This uses the standard Node.js Serverless Function format (Vercel's current default) rather than the standalone Edge Runtime, which Vercel deprecated in June 2025.
 
 ### Step 6 — Try it
@@ -112,21 +135,24 @@ same account — same library, same data. On your phone's browser, look for
 - Each user's data is protected by Postgres Row Level Security — even
   with direct database access via the API, one user's rows are invisible
   to another user's account.
-- The Anthropic API key never reaches the browser — it lives only in your
-  hosting platform's environment variables, used server-side by
-  `functions/api/lookup.js` (Cloudflare) or `api/lookup.js` (Vercel).
 - The lookup function checks with Supabase directly that the caller has a
-  valid, signed-in session before it will proxy a request, so the endpoint
-  can't be used by someone who hasn't signed in. This also means it keeps
-  working correctly even if Supabase changes their token signing format
-  in the future — nothing here depends on that.
-- **Rate limiting**: each signed-in user is capped at 100 "Look up" calls
-  per day (tracked in the `lookup_usage` table). This protects your
-  Anthropic bill from a runaway bug or an account being misused — one
-  person can't accidentally or deliberately rack up unlimited API spend.
-  Adjust `DAILY_LOOKUP_LIMIT` in whichever of `functions/api/lookup.js` /
-  `api/lookup.js` you're actually using if 100/day is too low or too
-  generous for how you'll actually use it.
+  valid, signed-in session before it will proxy anything (including the
+  Comic Vine relay), so the endpoint can't be used by someone who hasn't
+  signed in. This also means it keeps working correctly even if Supabase
+  changes their token signing format in the future — nothing here
+  depends on that.
+- **No AI cost by default.** "Look up" no longer calls Claude for any
+  category — every lookup goes through a free API (Google Books, iTunes,
+  RAWG, or Comic Vine), none of which bill by usage. RAWG and Comic Vine
+  are request-capped (not cost-capped), so the worst case if a cap is hit
+  is that lookups pause until the next day/month — never a surprise bill.
+- The old Anthropic-based fallback path is still in both lookup functions
+  (unused unless something explicitly calls it) with its original
+  protections intact: `ANTHROPIC_API_KEY` never reaches the browser, and
+  each signed-in user would be capped at 100 calls/day via the
+  `lookup_usage` table if that path were ever reactivated. Adjust
+  `DAILY_LOOKUP_LIMIT` in either lookup file if you ever bring it back
+  and want a different cap.
 
 ## Recommended: turn on database backups
 
