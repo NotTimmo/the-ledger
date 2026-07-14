@@ -3043,13 +3043,18 @@ async function performLookup(){
     const movieFieldsSpec = isMovie ? `, "runtime":<runtime in minutes as a number, or null>` : '';
     const bookAsk = isBook ? ', the page count, and the original publishing date' : '';
     const movieAsk = isMovie ? ', and the runtime in minutes' : '';
-    const prompt = `Search primarily on ${siteHint} (use a site:${siteHint} search if it helps) for the ${category} titled "${title}". Identify up to 3 real, distinct works that plausibly match this title (there may be only one). For each, find the ${creatorLabel}, the original release year${bookAsk}${movieAsk}, a direct URL to a cover or poster image from a public source if you can find one (or null if none found), and a short description in your own words (max 18 words, no quoted text). Respond with ONLY a raw JSON array, no markdown fences, no preamble, no commentary. Format exactly: [{"title":"...","creator":"...","year":"...","coverImageUrl":"..." or null,"description":"..."${bookFieldsSpec}${movieFieldsSpec}}]. If you find no plausible match, respond with exactly: []`;
+    const prompt = `Search primarily on ${siteHint} (use a site:${siteHint} search if it helps) for the ${category} titled "${title}". Identify up to 2 real, distinct works that plausibly match this title (there may be only one). For each, find the ${creatorLabel}, the original release year${bookAsk}${movieAsk}, a direct URL to a cover or poster image from a public source if you can find one (or null if none found), and a short description in your own words (max 18 words, no quoted text). Respond with ONLY a raw JSON array, no markdown fences, no preamble, no commentary. Format exactly: [{"title":"...","creator":"...","year":"...","coverImageUrl":"..." or null,"description":"..."${bookFieldsSpec}${movieFieldsSpec}}]. If you find no plausible match, respond with exactly: []`;
 
+    // Haiku is dramatically cheaper than Sonnet and handles this kind of
+    // short structured-extraction task just as well — no need for a
+    // larger model here. max_uses caps how many searches a single lookup
+    // can run (otherwise an ambiguous title could trigger several), and
+    // max_tokens is trimmed to match the smaller 2-match response size.
     const data = await callClaudeAPI({
-      model: "claude-sonnet-5",
-      max_tokens: 1000,
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 700,
       messages: [{ role: "user", content: prompt }],
-      tools: [{ type: "web_search_20250305", name: "web_search" }]
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }]
     });
 
     const textBlocks = (data.content || []).filter(b => b.type === 'text').map(b => b.text);
