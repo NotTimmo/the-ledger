@@ -90,7 +90,7 @@ that case with a "check your email" message after signup.
 1. Push this folder to a GitHub repository.
 2. In [Vercel](https://vercel.com), import that repo as a new project. No framework preset needed — it's a static site with one API route.
 3. Before deploying, go to the project's **Settings → Environment Variables** and add the same three: `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`.
-4. Deploy. Vercel will give you a `*.vercel.app` URL. It'll use `api/lookup.js` automatically — Vercel maps any file under `/api` at the repo root to a matching endpoint with no extra config.
+4. Deploy. Vercel will give you a `*.vercel.app` URL. It'll use `api/lookup.js` automatically — Vercel maps any file under `/api` at the repo root to a matching endpoint with no extra config. This uses the standard Node.js Serverless Function format (Vercel's current default) rather than the standalone Edge Runtime, which Vercel deprecated in June 2025.
 
 ### Step 6 — Try it
 
