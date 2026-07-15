@@ -33,15 +33,7 @@
   // the app (Look up, ISBN auto-fill, broken-cover recovery). A free key
   // (no payment info needed) raises this to 1,000 requests/day just for
   // this app. Get one at console.cloud.google.com — see README.
-  window.GOOGLE_BOOKS_API_KEY = "AIzaSyD5EvPAakyipmLeRoYuJ2VPZyr6KkyYzCg";
-  // ===================================================================
-
-  // ====== OPTIONAL — needed for "Paste a Link" with IMDb URLs ======
-  // Get a free key at omdbapi.com/apikey.aspx (email signup, no payment
-  // info). Free tier is 1,000 requests/day. This is what turns an IMDb
-  // link into a director/runtime/poster/plot lookup by ID — reliable,
-  // since it doesn't depend on guessing a title from the URL.
-  window.OMDB_API_KEY = "bbff6087";
+  window.GOOGLE_BOOKS_API_KEY = "";
   // ===================================================================
 
   // ====== DEV MODE — set to false before deploying for real ======
@@ -1057,6 +1049,43 @@ select option{
   padding: 18px 20px;
 }
 .stat-card.wide{ grid-column: 1 / -1; }
+
+.recommend-card{
+  display: flex; gap: 14px; margin-top: 14px;
+  background: rgba(35,38,47,0.04); border-radius: 4px; padding: 14px;
+}
+.recommend-cover{ width: 70px; height: 100px; object-fit: cover; border-radius: 3px; flex-shrink: 0; }
+.recommend-cover-placeholder{
+  width: 70px; height: 100px; border-radius: 3px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Fraunces', serif; font-size: 26px; font-weight: 600;
+}
+.recommend-title{ font-family: 'Fraunces', serif; font-weight: 600; font-size: 17px; }
+.recommend-meta{ font-size: 12px; color: rgba(35,38,47,0.6); margin-top: 2px; }
+.recommend-reason{ font-size: 12px; color: rgba(35,38,47,0.7); margin-top: 8px; font-style: italic; }
+
+
+/* ---------- Toasts (shared: Surprise Me, achievement unlocks) ---------- */
+#toastStack{
+  position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+  z-index: 500; display: flex; flex-direction: column; gap: 8px;
+  width: 100%; max-width: 380px; padding: 0 16px; pointer-events: none;
+}
+.toast{
+  background: var(--parchment); color: var(--text-dark);
+  border-left: 4px solid var(--gold); border-radius: 4px;
+  padding: 12px 16px; box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+  font-family: 'IBM Plex Sans', sans-serif; font-size: 13px;
+  display: flex; align-items: center; gap: 10px;
+  animation: toastIn 0.25s ease-out;
+  pointer-events: auto;
+}
+.toast.toast-out{ animation: toastOut 0.25s ease-in forwards; }
+.toast-icon{ font-size: 20px; line-height: 1; }
+.toast-title{ font-weight: 600; }
+@keyframes toastIn{ from{ opacity:0; transform: translateY(-10px); } to{ opacity:1; transform: translateY(0); } }
+@keyframes toastOut{ from{ opacity:1; } to{ opacity:0; transform: translateY(-10px); } }
+
 .stat-number{ font-family:'Fraunces', serif; font-size:38px; font-weight:700; line-height:1; color:#23262F; }
 .stat-label{ font-family:'IBM Plex Mono', monospace; font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:rgba(35,38,47,0.55); margin-top:6px; }
 .cat-bar-row{ display:flex; align-items:center; gap:10px; margin-bottom:9px; font-family:'IBM Plex Mono', monospace; font-size:11px; }
@@ -1181,6 +1210,8 @@ select option{
 </div>
 
 <div id="appRoot" class="hidden">
+<div id="toastStack"></div>
+
 
 <div class="header">
   <h1 style="color:var(--gold);">The Ledger</h1>
@@ -1222,6 +1253,8 @@ select option{
   </div>
   <button class="btn btn-ghost hidden" id="settingsBtn">⚙ Settings</button>
   <button class="btn btn-ghost" id="selectModeBtn">☑ Select</button>
+  <button class="btn btn-ghost" id="surpriseMeBtn" title="Random pick from your Backlog">🎲 Surprise Me</button>
+  <button class="btn btn-ghost" id="recommendBtn">💡 Recommend</button>
   <button class="btn btn-primary" id="addBtn">+ Add Entry</button>
 </div>
 
@@ -1319,6 +1352,29 @@ select option{
   <div id="achievementsGrid"></div>
 </div>
 
+<div class="overlay hidden" id="recommendOverlay">
+  <div class="modal">
+    <h2>What Should I Read/Watch Next?</h2>
+    <div class="field">
+      <label>Media Type</label>
+      <select id="recommendCategory">
+        <option value="">All Categories</option>
+        <option value="Books">Books</option>
+        <option value="Comics">Comics</option>
+        <option value="Movies">Movies</option>
+        <option value="TV Shows">TV Shows</option>
+        <option value="Video Games">Video Games</option>
+        <option value="wildcard">🎲 Wildcard (totally random)</option>
+      </select>
+    </div>
+    <div id="recommendResult"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="recommendCloseBtn">Close</button>
+      <button class="btn btn-primary" id="recommendGetBtn">Get Recommendation</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay hidden" id="settingsOverlay">
   <div class="modal">
     <h2>Settings</h2>
@@ -1330,6 +1386,7 @@ select option{
           <select id="settingTheme">
             <option value="dark">Dark</option>
             <option value="light">Light</option>
+            <option value="system">Match Device</option>
           </select>
         </div>
         <div class="field">
@@ -1606,13 +1663,6 @@ select option{
         <input type="text" id="f_title" placeholder="e.g. Hyperion">
       </div>
       <button class="lookup-btn" id="lookupBtn" type="button">⌕ Look up</button>
-    </div>
-    <div class="title-row" style="margin-top:8px;">
-      <div class="field">
-        <label>Or Paste a Link</label>
-        <input type="text" id="f_linkPaste" placeholder="e.g. a Goodreads, IMDb, RAWG, or Comic Vine page URL">
-      </div>
-      <button class="lookup-btn" id="linkLookupBtn" type="button">⇩ Fetch from Link</button>
     </div>
     <p class="lookup-status" id="lookupStatus"></p>
     <p class="lookup-status hidden" id="duplicateWarning" style="color:var(--rust);"></p>
@@ -2182,6 +2232,117 @@ document.getElementById('selectModeBtn').addEventListener('click', ()=>{
   render();
 });
 
+/* ---------- Toasts ---------- */
+function showToast(message, icon){
+  const stack = document.getElementById('toastStack');
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = `${icon ? `<span class="toast-icon">${icon}</span>` : ''}<span class="toast-title">${escapeHtml(message)}</span>`;
+  stack.appendChild(el);
+  setTimeout(()=>{
+    el.classList.add('toast-out');
+    setTimeout(()=> el.remove(), 250);
+  }, 4000);
+}
+
+document.getElementById('surpriseMeBtn').addEventListener('click', ()=>{
+  const pool = items.filter(i => i.status === 'Backlog' && (activeTab === 'All' || i.category === activeTab));
+  if(pool.length === 0){
+    showToast(activeTab === 'All' ? 'Nothing in your Backlog right now!' : `Nothing in your ${activeTab} Backlog right now!`, '🎲');
+    return;
+  }
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  showToast(`How about "${pick.title}"?`, '🎲');
+  openModal(pick.id);
+});
+
+/* ---------- Recommendations ---------- */
+function computeRecommendation(categoryFilter){
+  if(categoryFilter === 'wildcard'){
+    const pool = items.filter(i => i.status === 'Backlog');
+    if(pool.length === 0) return null;
+    const item = pool[Math.floor(Math.random() * pool.length)];
+    return { item, reason: '🎲 Wildcard pick — pure chance, no taste-matching involved!' };
+  }
+
+  const scope = categoryFilter ? items.filter(i => i.category === categoryFilter) : items;
+  const backlogPool = scope.filter(i => i.status === 'Backlog');
+  if(backlogPool.length === 0) return null;
+
+  const loved = scope.filter(i => i.status === 'Completed' && i.rating >= 4);
+  const tagFreq = {};
+  loved.forEach(i => {
+    const tags = (i.tags || '').split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+    if(i.genre) tags.push(i.genre.trim().toLowerCase());
+    tags.forEach(t => { tagFreq[t] = (tagFreq[t] || 0) + 1; });
+  });
+
+  let best = null, bestScore = 0;
+  const scored = backlogPool.map(i => {
+    const tags = (i.tags || '').split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+    if(i.genre) tags.push(i.genre.trim().toLowerCase());
+    const matched = tags.filter(t => tagFreq[t]);
+    const score = matched.reduce((sum, t) => sum + tagFreq[t], 0);
+    return { item: i, score, matched };
+  });
+  scored.forEach(s => { if(s.score > bestScore){ bestScore = s.score; best = s; } });
+
+  if(!best || bestScore === 0){
+    const item = backlogPool[Math.floor(Math.random() * backlogPool.length)];
+    return { item, reason: 'Random pick — rate a few more completed items with matching tags/genres to get tailored suggestions.' };
+  }
+
+  const topTags = [...new Set(best.matched)]
+    .sort((a,b) => tagFreq[b] - tagFreq[a])
+    .slice(0, 3)
+    .map(t => t.replace(/\b\w/g, c => c.toUpperCase()));
+  return { item: best.item, reason: `Because you loved things tagged ${topTags.join(', ')}.` };
+}
+
+function renderRecommendResult(rec){
+  const resultEl = document.getElementById('recommendResult');
+  if(!rec){
+    resultEl.innerHTML = `<p class="lookup-status" style="margin-top:14px;">Nothing in that Backlog to recommend yet — add something first!</p>`;
+    return;
+  }
+  const { item, reason } = rec;
+  resultEl.innerHTML = `
+    <div class="recommend-card">
+      ${item.coverUrl
+        ? `<img class="recommend-cover" src="${escapeHtml(item.coverUrl)}" alt="">`
+        : `<div class="recommend-cover-placeholder" style="background:${CAT_COLOR[item.category]}22;color:${CAT_COLOR[item.category]}">${escapeHtml((item.title||'?').charAt(0).toUpperCase())}</div>`
+      }
+      <div style="flex:1; min-width:0;">
+        <div class="recommend-title">${escapeHtml(item.title)}</div>
+        <div class="recommend-meta">${escapeHtml(item.category)}${item.creator ? ' · ' + escapeHtml(item.creator) : ''}</div>
+        <div class="recommend-reason">${escapeHtml(reason)}</div>
+        <div style="margin-top:10px; display:flex; gap:8px;">
+          <button class="btn btn-primary" id="recommendOpenBtn" type="button">Open Entry</button>
+          <button class="btn btn-ghost" id="recommendAgainBtn" type="button">Try Another</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('recommendOpenBtn').addEventListener('click', ()=>{
+    document.getElementById('recommendOverlay').classList.add('hidden');
+    openModal(item.id);
+  });
+  document.getElementById('recommendAgainBtn').addEventListener('click', ()=>{
+    renderRecommendResult(computeRecommendation(document.getElementById('recommendCategory').value));
+  });
+}
+
+document.getElementById('recommendBtn').addEventListener('click', ()=>{
+  document.getElementById('recommendResult').innerHTML = '';
+  document.getElementById('recommendOverlay').classList.remove('hidden');
+});
+document.getElementById('recommendCloseBtn').addEventListener('click', ()=>{
+  document.getElementById('recommendOverlay').classList.add('hidden');
+});
+document.getElementById('recommendGetBtn').addEventListener('click', ()=>{
+  renderRecommendResult(computeRecommendation(document.getElementById('recommendCategory').value));
+});
+
 document.getElementById('bulkCancelBtn').addEventListener('click', ()=>{
   selectMode = false;
   selectedIds.clear();
@@ -2243,6 +2404,7 @@ document.getElementById('bulkDeleteBtn').addEventListener('click', async ()=>{
 });
 
 function render(){
+  checkForNewAchievements();
   const list = getFiltered();
   countLine.textContent = `${list.length} ${list.length===1?'entry':'entries'}${activeTab!=='All' ? ' — '+activeTab : ''}`;
 
@@ -3157,16 +3319,14 @@ async function lookupRawgFree(title){
 // this can't be called client-side — it goes through the same serverless
 // function that already proxies the Anthropic API, just with a different
 // request shape it recognizes and routes differently on the server.
-// Pass an `id` (the "4050-12345" style ID from a comicvine.gamespot.com
-// URL) for a precise single-volume fetch, or a `title` to search instead.
-async function lookupComicVineFree(title, id){
+async function lookupComicVineFree(title){
   try{
     const sessionRes = await supabaseClient.auth.getSession();
     const token = sessionRes && sessionRes.data && sessionRes.data.session ? sessionRes.data.session.access_token : '';
     const res = await fetch('/api/lookup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify(id ? { provider: 'comicvine', id } : { provider: 'comicvine', query: title })
+      body: JSON.stringify({ provider: 'comicvine', query: title })
     });
     if(!res.ok) return [];
     const data = await res.json();
@@ -3176,219 +3336,6 @@ async function lookupComicVineFree(title, id){
     return [];
   }
 }
-
-// Fetches one specific game by its RAWG slug (from a rawg.io/games/{slug}
-// URL) — used by "Paste a Link". More precise than a text search since
-// it's the exact game linked, not a guess.
-async function lookupRawgBySlug(slug){
-  if(!window.RAWG_API_KEY){
-    console.warn('RAWG_API_KEY is not set — see the config block near the top of index.html.');
-    return [];
-  }
-  try{
-    const res = await fetch(`https://api.rawg.io/api/games/${encodeURIComponent(slug)}?key=${encodeURIComponent(window.RAWG_API_KEY)}`);
-    if(!res.ok) return [];
-    const d = await res.json();
-    if(!d || !d.id) return [];
-    const year = d.released ? d.released.slice(0, 4) : '';
-    let description = (d.description_raw || '').replace(/\r?\n+/g, ' ').trim();
-    if(description.length > 140) description = description.slice(0, 137) + '…';
-    const developers = Array.isArray(d.developers) ? d.developers.map(x => x.name).join(', ') : '';
-    return [{
-      title: d.name || slug,
-      creator: developers,
-      year,
-      coverImageUrl: d.background_image || null,
-      description
-    }];
-  }catch(e){
-    console.error('RAWG by-slug lookup failed', e);
-    return [];
-  }
-}
-
-// Fetches one specific title by IMDb ID via OMDb (needs a free key — see
-// the window.OMDB_API_KEY config near the top of this file). Used by
-// "Paste a Link" for imdb.com URLs. Returns the detected media type too
-// ("movie" or "series"), so the category dropdown can be set automatically.
-async function lookupOmdbById(imdbId){
-  if(!window.OMDB_API_KEY){
-    console.warn('OMDB_API_KEY is not set — see the config block near the top of index.html.');
-    return null;
-  }
-  try{
-    const res = await fetch(`https://www.omdbapi.com/?i=${encodeURIComponent(imdbId)}&apikey=${encodeURIComponent(window.OMDB_API_KEY)}`);
-    if(!res.ok) return null;
-    const d = await res.json();
-    if(!d || d.Response === 'False') return null;
-    const runtimeMatch = (d.Runtime || '').match(/(\d+)/);
-    return {
-      match: {
-        title: d.Title || '',
-        creator: (d.Director && d.Director !== 'N/A') ? d.Director : '',
-        year: (d.Year || '').slice(0, 4),
-        coverImageUrl: (d.Poster && d.Poster !== 'N/A') ? d.Poster : null,
-        description: (d.Plot && d.Plot !== 'N/A') ? d.Plot : '',
-        runtime: runtimeMatch ? parseInt(runtimeMatch[1]) : null
-      },
-      mediaType: d.Type === 'series' ? 'TV Shows' : 'Movies'
-    };
-  }catch(e){
-    console.error('OMDb lookup failed', e);
-    return null;
-  }
-}
-
-// Last-resort fallback for a link from a site we don't specifically
-// recognize: take a guess at the title from the last URL path segment.
-// This is genuinely just a guess, not a real lookup — communicated as
-// such in performLinkLookup below.
-function extractTitleGuessFromUrl(url){
-  try{
-    const u = new URL(url);
-    const segments = u.pathname.split('/').filter(Boolean);
-    let last = segments[segments.length - 1] || '';
-    last = decodeURIComponent(last);
-    last = last.replace(/\.(html?|php|aspx?)$/i, '');
-    last = last.replace(/^\d+[\.\-_]?/, ''); // strip a leading numeric ID
-    last = last.replace(/[\-_.+]+/g, ' ').trim();
-    return last;
-  }catch(e){
-    return '';
-  }
-}
-
-async function performLinkLookup(){
-  const urlInput = document.getElementById('f_linkPaste');
-  const rawUrl = urlInput.value.trim();
-  const statusEl = document.getElementById('lookupStatus');
-  const resultsEl = document.getElementById('lookupResults');
-  const btn = document.getElementById('linkLookupBtn');
-
-  if(!rawUrl){
-    statusEl.textContent = 'Paste a link first.';
-    return;
-  }
-
-  let parsed;
-  try{ parsed = new URL(rawUrl); }catch(e){
-    statusEl.textContent = 'That doesn\'t look like a valid URL.';
-    return;
-  }
-
-  btn.disabled = true;
-  resultsEl.classList.add('hidden');
-  resultsEl.innerHTML = '';
-  const host = parsed.hostname.replace(/^www\./, '');
-
-  try{
-    // Goodreads: no public API, so this extracts the title from the
-    // URL's own slug (e.g. "77566.Hyperion" -> "Hyperion") and runs it
-    // through the same free Google Books search Look up already uses.
-    // This is a best-effort guess from the URL text, not a real scrape
-    // of the page — Goodreads titles in the slug are usually clean, but
-    // edition/series info sometimes tags along.
-    if(host === 'goodreads.com'){
-      statusEl.textContent = 'Reading title from Goodreads link…';
-      const match = parsed.pathname.match(/\/show\/\d+[.\-_]?(.+)/);
-      const guess = match ? match[1].replace(/[\-_]+/g, ' ').replace(/\.\w+$/, '').trim() : extractTitleGuessFromUrl(rawUrl);
-      document.getElementById('f_category').value = 'Books';
-      toggleBookFields();
-      checkDuplicateWarning();
-      const matches = await lookupGoogleBooksFree(guess);
-      if(matches.length === 0) statusEl.textContent = `No matches found for "${guess}" (guessed from the link) — try Look up by title instead.`;
-      else renderLookupResults(matches, guess, true);
-      return;
-    }
-
-    // IMDb: reliable, since we're looking up by their own ID rather than
-    // guessing a title — the URL contains an opaque "tt1234567" ID with
-    // no readable title in it at all, so a real ID-based API is required.
-    if(host === 'imdb.com'){
-      statusEl.textContent = 'Looking up IMDb link…';
-      const idMatch = parsed.pathname.match(/\/title\/(tt\d+)/);
-      if(!idMatch){
-        statusEl.textContent = 'Couldn\'t find an IMDb title ID in that link.';
-        return;
-      }
-      if(!window.OMDB_API_KEY){
-        statusEl.textContent = 'IMDb links need a free OMDb API key — see the config block near the top of index.html (README has setup steps).';
-        return;
-      }
-      const result = await lookupOmdbById(idMatch[1]);
-      if(!result){
-        statusEl.textContent = 'No match found for that IMDb link.';
-        return;
-      }
-      document.getElementById('f_category').value = result.mediaType;
-      toggleBookFields();
-      checkDuplicateWarning();
-      renderLookupResults([result.match], result.match.title, false);
-      return;
-    }
-
-    // RAWG: precise, since the URL's own slug is RAWG's real identifier
-    // for the game, not a guess.
-    if(host === 'rawg.io'){
-      statusEl.textContent = 'Looking up RAWG link…';
-      const slugMatch = parsed.pathname.match(/\/games\/([^/]+)/);
-      if(!slugMatch){
-        statusEl.textContent = 'Couldn\'t find a game slug in that link.';
-        return;
-      }
-      document.getElementById('f_category').value = 'Video Games';
-      toggleBookFields();
-      checkDuplicateWarning();
-      const matches = await lookupRawgBySlug(slugMatch[1]);
-      if(matches.length === 0) statusEl.textContent = 'No match found for that RAWG link.';
-      else renderLookupResults(matches, slugMatch[1], false);
-      return;
-    }
-
-    // Comic Vine: precise, since the URL's own resource ID (e.g.
-    // "4050-12345") identifies the exact volume, not a guess.
-    if(host === 'comicvine.gamespot.com'){
-      statusEl.textContent = 'Looking up Comic Vine link…';
-      const idMatch = parsed.pathname.match(/(\d{4}-\d+)/);
-      if(!idMatch){
-        statusEl.textContent = 'Couldn\'t find a Comic Vine volume ID in that link.';
-        return;
-      }
-      document.getElementById('f_category').value = 'Comics';
-      toggleBookFields();
-      checkDuplicateWarning();
-      const matches = await lookupComicVineFree(null, idMatch[1]);
-      if(matches.length === 0) statusEl.textContent = 'No match found for that Comic Vine link.';
-      else renderLookupResults(matches, idMatch[1], false);
-      return;
-    }
-
-    // Unrecognized site: best-effort title guess from the URL, searched
-    // through whichever free source matches the currently-selected
-    // category. Clearly weaker than the domain-specific paths above —
-    // said so in the status message rather than presenting it as reliable.
-    const guess = extractTitleGuessFromUrl(rawUrl);
-    if(!guess){
-      statusEl.textContent = 'Couldn\'t guess a title from that link — try Look up by title instead.';
-      return;
-    }
-    statusEl.textContent = `Unrecognized site — guessing title "${guess}" from the link and searching…`;
-    const category = document.getElementById('f_category').value;
-    let matches = [];
-    if(category === 'Books') matches = await lookupGoogleBooksFree(guess);
-    else if(category === 'Movies' || category === 'TV Shows') matches = await lookupItunesFree(guess, category === 'TV Shows' ? 'tvShow' : 'movie');
-    else if(category === 'Video Games') matches = await lookupRawgFree(guess);
-    else if(category === 'Comics') matches = await lookupComicVineFree(guess);
-    if(matches.length === 0) statusEl.textContent = `No matches found for guessed title "${guess}" — try Look up by title instead.`;
-    else renderLookupResults(matches, guess, category === 'Books');
-  }catch(e){
-    console.error('Link lookup failed', e);
-    statusEl.textContent = 'Something went wrong reading that link. Check your connection and try again.';
-  }finally{
-    btn.disabled = false;
-  }
-}
-document.getElementById('linkLookupBtn').addEventListener('click', performLinkLookup);
 
 async function performLookup(){
   const title = document.getElementById('f_title').value.trim();
@@ -4114,6 +4061,25 @@ function computeAchievements(){
   });
 }
 
+// Tracks which achievements were already unlocked, so we only celebrate
+// genuinely NEW unlocks with a toast — not ones that were already earned
+// before this session started.
+let unlockedAchievementIds = new Set();
+
+function initAchievementBaseline(){
+  unlockedAchievementIds = new Set(computeAchievements().filter(a => a.unlocked).map(a => a.id));
+}
+
+function checkForNewAchievements(){
+  const all = computeAchievements();
+  all.forEach(a => {
+    if(a.unlocked && !unlockedAchievementIds.has(a.id)){
+      unlockedAchievementIds.add(a.id);
+      showToast(`Achievement unlocked: ${a.title}`, a.icon);
+    }
+  });
+}
+
 function renderAchievements(){
   const all = computeAchievements();
   const filter = document.getElementById('achievementsCategory').value;
@@ -4407,6 +4373,31 @@ function computeDailyPagesProgress(month, year){
   return { totalPages, avgPerDay, goal, pct };
 }
 
+function computeOnThisDay(){
+  const today = new Date();
+  const mmdd = `${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const thisYear = today.getFullYear();
+  const matches = journalEntries.filter(e => {
+    if(!e.date) return false;
+    const [y, m, d] = e.date.split('-');
+    return `${m}-${d}` === mmdd && parseInt(y) !== thisYear;
+  });
+  // Most recent entry per (year, item) pair, so a book you logged pages
+  // for three times in one day doesn't show three times.
+  const seen = new Set();
+  const deduped = [];
+  matches.sort((a,b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+  matches.forEach(e => {
+    const year = e.date.slice(0,4);
+    const key = `${year}:${e.itemId || e.itemTitle}`;
+    if(seen.has(key)) return;
+    seen.add(key);
+    deduped.push({ ...e, year });
+  });
+  deduped.sort((a,b) => b.year.localeCompare(a.year));
+  return deduped;
+}
+
 function computeYearlyChallenge(yearVal){
   const cat = getDashboardCategory();
   const year = yearVal ? parseInt(yearVal) : new Date().getFullYear();
@@ -4455,6 +4446,7 @@ function renderStats(){
   const spend = computeSpend(catList);
   const dailyPages = computeDailyPagesProgress(month, year);
   const challenge = computeYearlyChallenge(year || new Date().getFullYear());
+  const onThisDay = computeOnThisDay();
   const cat = getDashboardCategory();
   const grid = document.getElementById('statsGrid');
   const maxCat = Math.max(1, ...Object.values(stats.catCounts));
@@ -4487,6 +4479,22 @@ function renderStats(){
       <div class="stat-number">${streak > 0 ? '🔥 ' + streak : '0'}</div>
       <div class="stat-label">Day Streak</div>
     </div>
+
+    ${onThisDay.length > 0 ? `
+    <div class="stat-card wide">
+      <div class="stat-label" style="margin-bottom:8px;">On This Day</div>
+      ${onThisDay.map(e => {
+        const meta = JOURNAL_TYPE_META[e.type] || JOURNAL_TYPE_META.note;
+        const icon = (e.type === 'finished' && CATEGORY_ICON[e.category]) ? CATEGORY_ICON[e.category] : meta.icon;
+        return `
+          <div class="top-rated-item">
+            <span class="top-rated-title">${icon} ${escapeHtml(e.itemTitle || 'Note')} <span style="color:rgba(35,38,47,0.45); font-family:'IBM Plex Mono',monospace; font-size:11px;">— ${escapeHtml(e.year)}</span></span>
+            ${e.rating ? `<span class="top-rated-rating">${formatRating(e.rating)} ★</span>` : ''}
+          </div>
+        `;
+      }).join('')}
+    </div>
+    ` : ''}
 
     <div class="stat-card wide">
       <div class="stat-label" style="margin-bottom:2px;">Library Snapshot${cat ? ' — ' + escapeHtml(cat) : ''}</div>
@@ -4865,11 +4873,30 @@ document.getElementById('generateImageBtn').addEventListener('click', generateSu
 
 /* ---------- Settings (desktop app only) ---------- */
 /* ---------- Display preferences: theme / accent / density ---------- */
+function resolveTheme(theme){
+  if(theme === 'system'){
+    return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  }
+  return theme;
+}
+
 function applyDisplayClasses(theme, accent, density){
-  document.body.classList.toggle('theme-light', theme === 'light');
+  document.body.classList.toggle('theme-light', resolveTheme(theme) === 'light');
   ['accent-rust','accent-blue','accent-green','accent-purple'].forEach(c => document.body.classList.remove(c));
   if(accent && accent !== 'gold') document.body.classList.add('accent-' + accent);
   document.body.classList.toggle('density-compact', density === 'compact');
+}
+
+// If the person picks "Match Device," keep it live — flip immediately if
+// they change their OS/browser light-dark setting without needing to
+// revisit Settings.
+if(window.matchMedia){
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', ()=>{
+    const themeSelect = document.getElementById('settingTheme');
+    if(themeSelect && themeSelect.value === 'system'){
+      applyDisplayClasses('system', document.getElementById('settingAccent').value, document.getElementById('settingDensity').value);
+    }
+  });
 }
 
 async function loadDisplayPrefs(){
@@ -5321,6 +5348,7 @@ async function initApp(){
   await loadItems();
   await loadJournal();
   await loadGoals();
+  initAchievementBaseline();
   render();
   populateStatsYears();
 }
