@@ -33,7 +33,7 @@
   // the app (Look up, ISBN auto-fill, broken-cover recovery). A free key
   // (no payment info needed) raises this to 1,000 requests/day just for
   // this app. Get one at console.cloud.google.com — see README.
-  window.GOOGLE_BOOKS_API_KEY = "AIzaSyD5EvPAakyipmLeRoYuJ2VPZyr6KkyYzCg";
+  window.GOOGLE_BOOKS_API_KEY = "";
   // ===================================================================
 
   // ====== DEV MODE — set to false before deploying for real ======
@@ -221,6 +221,19 @@ body{
   align-items:center;
   border-top: 1px solid rgba(var(--chrome-rgb),0.12);
   padding-top: 22px;
+}
+.toolbar-actions{
+  max-width: 1100px;
+  margin: 10px auto 0;
+  padding: 0 32px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.toolbar-actions .btn-ghost{
+  padding: 8px 12px;
+  font-size: 12px;
 }
 .toolbar input[type=text], .toolbar select{
   background: rgba(var(--chrome-rgb),0.06);
@@ -1251,10 +1264,14 @@ select option{
     <button class="view-btn" id="viewList" title="List view">☰ List</button>
     <button class="view-btn" id="viewCovers" title="Cover view">▤ Covers</button>
   </div>
+</div>
+
+<div class="toolbar-actions">
   <button class="btn btn-ghost hidden" id="settingsBtn">⚙ Settings</button>
   <button class="btn btn-ghost" id="selectModeBtn">☑ Select</button>
   <button class="btn btn-ghost" id="surpriseMeBtn" title="Random pick from your Backlog">🎲 Surprise Me</button>
   <button class="btn btn-ghost" id="recommendBtn">💡 Recommend</button>
+  <div class="spacer"></div>
   <button class="btn btn-primary" id="addBtn">+ Add Entry</button>
 </div>
 
@@ -2447,6 +2464,54 @@ function render(){
 // Appends &key=... when a Google Books API key is configured, or nothing
 // otherwise — keeps every call site simple regardless of whether one's
 // been set up yet.
+// Open Library is fully keyless — no credential of any kind, so there's
+// nothing here that can ever be "exposed." Used as the primary source for
+// Books; Google Books (keyless, shared quota) is only a fallback now, to
+// keep exposure to that shared-quota 429 risk as small as possible.
+async function fetchOpenLibraryCover(item){
+  try{
+    if(item.isbn){
+      const clean = item.isbn.replace(/[^0-9Xx]/g,'');
+      if(/^(\d{9}[\dXx]|\d{13})$/.test(clean)){
+        // ?default=false makes this return a real 404 when there's no
+        // cover, instead of a generic blank placeholder image, so we can
+        // actually tell whether it found something.
+        const checkRes = await fetch(`https://covers.openlibrary.org/b/isbn/${clean}-L.jpg?default=false`);
+        if(checkRes.ok) return `https://covers.openlibrary.org/b/isbn/${clean}-L.jpg`;
+      }
+    }
+    // No ISBN (or it came up empty) — search by title/author instead.
+    const res = await fetch(`https://openlibrary.org/search.json?title=${encodeURIComponent(item.title)}${item.creator ? '&author='+encodeURIComponent(item.creator) : ''}&limit=1&fields=cover_i`);
+    if(!res.ok) return null;
+    const data = await res.json();
+    const doc = data && data.docs && data.docs[0];
+    return (doc && doc.cover_i) ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg` : null;
+  }catch(e){
+    return null;
+  }
+}
+
+async function lookupOpenLibraryFree(title){
+  try{
+    const res = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(title)}&limit=2&fields=title,author_name,first_publish_year,cover_i,number_of_pages_median`);
+    if(!res.ok) return [];
+    const data = await res.json();
+    if(!Array.isArray(data.docs)) return [];
+    return data.docs.slice(0, 2).map(doc => ({
+      title: doc.title || title,
+      creator: Array.isArray(doc.author_name) ? doc.author_name.join(', ') : '',
+      year: doc.first_publish_year ? String(doc.first_publish_year) : '',
+      coverImageUrl: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg` : null,
+      description: '',
+      pageCount: doc.number_of_pages_median || '',
+      publishDate: doc.first_publish_year ? String(doc.first_publish_year) : ''
+    }));
+  }catch(e){
+    console.error('Open Library lookup failed', e);
+    return [];
+  }
+}
+
 function googleBooksKeyParam(){
   return window.GOOGLE_BOOKS_API_KEY ? `&key=${encodeURIComponent(window.GOOGLE_BOOKS_API_KEY)}` : '';
 }
@@ -2482,34 +2547,41 @@ function wireSectionInteractions(){
   sectionsEl.querySelectorAll('.card-cover').forEach(img=>{
     const placeholder = img.parentElement.querySelector('.card-cover-placeholder');
     const itemId = img.closest('[data-id]') ? img.closest('[data-id]').dataset.id : null;
-    let triedFallback = false;
+    let fallbackStage = 0;
 
     const showPlaceholder = () => {
       img.classList.add('hidden');
       if(placeholder) placeholder.classList.remove('hidden');
     };
 
+    const applyCover = async (item, altCover) => {
+      item.coverUrl = altCover;
+      await saveItem(item);
+      img.src = altCover;
+      img.classList.remove('hidden');
+      if(placeholder) placeholder.classList.add('hidden');
+    };
+
     const fallback = async () => {
       const item = itemId ? items.find(i => i.id === itemId) : null;
-      // If a saved cover URL is broken or blank, try a real, free source
-      // before giving up to the letter placeholder — Google Books for
-      // books, iTunes for movies/TV. Only once per image.
-      if(!triedFallback && item){
-        triedFallback = true;
-        let altCover = null;
-        if(item.category === 'Books'){
-          altCover = await fetchGoogleBooksCover(item);
-        } else if(item.category === 'Movies' || item.category === 'TV Shows'){
-          altCover = await fetchItunesCover(item.title, item.category === 'TV Shows' ? 'tvShow' : 'movie');
+      if(!item){ showPlaceholder(); return; }
+
+      // If a saved cover URL is broken or blank, try real, free sources
+      // before giving up to the letter placeholder. Books get two tries
+      // (Open Library first — fully keyless — then Google Books as a
+      // fallback); Movies/TV get one (iTunes).
+      if(item.category === 'Books'){
+        const sources = [fetchOpenLibraryCover, fetchGoogleBooksCover];
+        while(fallbackStage < sources.length){
+          const source = sources[fallbackStage];
+          fallbackStage++;
+          const altCover = await source(item);
+          if(altCover){ await applyCover(item, altCover); return; }
         }
-        if(altCover){
-          item.coverUrl = altCover;
-          await saveItem(item);
-          img.src = altCover;
-          img.classList.remove('hidden');
-          if(placeholder) placeholder.classList.add('hidden');
-          return;
-        }
+      } else if((item.category === 'Movies' || item.category === 'TV Shows') && fallbackStage === 0){
+        fallbackStage++;
+        const altCover = await fetchItunesCover(item.title, item.category === 'TV Shows' ? 'tvShow' : 'movie');
+        if(altCover){ await applyCover(item, altCover); return; }
       }
       showPlaceholder();
     };
@@ -2819,7 +2891,7 @@ document.getElementById('f_isbn').addEventListener('input', ()=>{
   if(coverEl.value.trim() || !isbn) return;
   // Debounced so it fires once typing pauses, not on every keystroke.
   isbnCoverDebounce = setTimeout(async ()=>{
-    const url = await fetchGoogleBooksCover({ isbn });
+    const url = (await fetchOpenLibraryCover({ isbn })) || (await fetchGoogleBooksCover({ isbn }));
     if(url && !coverEl.value.trim()){ coverEl.value = url; updateCoverPreview(); }
   }, 500);
 });
@@ -3355,12 +3427,14 @@ async function performLookup(){
   const isGame = category === 'Video Games';
   const isComic = category === 'Comics';
 
-  // Every category now has a free, no-AI-cost source: Google Books, iTunes,
-  // RAWG, or Comic Vine (the last one via a small server proxy, since its
-  // API blocks direct browser requests — see lookupComicVineFree above).
-  // "Look up" no longer calls Claude at all, so there's no ongoing AI cost
+  // Books try Open Library first (fully keyless, no exposure risk of any
+  // kind), falling back to Google Books only if that comes up empty.
+  // Every other category has its own single free source: iTunes, RAWG,
+  // or Comic Vine (the last one via a small server proxy, since its API
+  // blocks direct browser requests — see lookupComicVineFree above).
+  // "Look up" doesn't call Claude at all, so there's no ongoing AI cost
   // from using this feature, regardless of how often it's used.
-  const sourceLabel = isBook ? 'Google Books' : (isGame ? 'RAWG' : (isComic ? 'Comic Vine' : 'iTunes'));
+  const sourceLabel = isBook ? 'Open Library' : (isGame ? 'RAWG' : (isComic ? 'Comic Vine' : 'iTunes'));
   btn.disabled = true;
   resultsEl.classList.add('hidden');
   resultsEl.innerHTML = '';
@@ -3368,7 +3442,13 @@ async function performLookup(){
 
   try{
     let matches = [];
-    if(isBook) matches = await lookupGoogleBooksFree(title);
+    if(isBook){
+      matches = await lookupOpenLibraryFree(title);
+      if(matches.length === 0){
+        statusEl.textContent = 'Searching Google Books…';
+        matches = await lookupGoogleBooksFree(title);
+      }
+    }
     else if(isMovie || isTV) matches = await lookupItunesFree(title, isTV ? 'tvShow' : 'movie');
     else if(isGame) matches = await lookupRawgFree(title);
     else if(isComic) matches = await lookupComicVineFree(title);
@@ -5289,7 +5369,7 @@ document.getElementById('refreshCoversBtn').addEventListener('click', async ()=>
     btn.textContent = `Refreshing ${i+1}/${candidates.length}…`;
     let cover = null;
     if(item.category === 'Books'){
-      cover = await fetchGoogleBooksCover(item);
+      cover = (await fetchOpenLibraryCover(item)) || (await fetchGoogleBooksCover(item));
     } else {
       cover = await fetchItunesCover(item.title, item.category === 'TV Shows' ? 'tvShow' : 'movie');
     }
