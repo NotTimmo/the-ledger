@@ -1262,6 +1262,8 @@ select option{
     <option value="playtime_desc">Play Time (longest)</option>
     <option value="players_asc">Player Count (fewest)</option>
     <option value="players_desc">Player Count (most)</option>
+    <option value="minage_asc">Min Age (youngest)</option>
+    <option value="minage_desc">Min Age (oldest)</option>
   </select>
   <div class="spacer"></div>
   <div class="view-toggle">
@@ -1309,12 +1311,12 @@ select option{
   <div class="stats-filters">
     <select id="statsCategory">
       <option value="">All Categories</option>
+      <option value="Board Games">Board Games</option>
       <option value="Books">Books</option>
       <option value="Comics">Comics</option>
       <option value="Movies">Movies</option>
       <option value="TV Shows">TV Shows</option>
       <option value="Video Games">Video Games</option>
-      <option value="Board Games">Board Games</option>
     </select>
     <select id="statsMonth">
       <option value="">All Time</option>
@@ -1362,12 +1364,12 @@ select option{
   <div class="stats-filters">
     <select id="achievementsCategory">
       <option value="">All Categories</option>
+      <option value="Board Games">Board Games</option>
       <option value="Books">Books</option>
       <option value="Comics">Comics</option>
       <option value="Movies">Movies</option>
       <option value="TV Shows">TV Shows</option>
       <option value="Video Games">Video Games</option>
-      <option value="Board Games">Board Games</option>
       <option value="Overall">Overall</option>
     </select>
     <div class="spacer"></div>
@@ -1383,12 +1385,12 @@ select option{
       <label>Media Type</label>
       <select id="recommendCategory">
         <option value="">All Categories</option>
+        <option value="Board Games">Board Games</option>
         <option value="Books">Books</option>
         <option value="Comics">Comics</option>
         <option value="Movies">Movies</option>
         <option value="TV Shows">TV Shows</option>
         <option value="Video Games">Video Games</option>
-        <option value="Board Games">Board Games</option>
         <option value="wildcard">🎲 Wildcard (totally random)</option>
       </select>
     </div>
@@ -1470,12 +1472,12 @@ select option{
         <div class="field">
           <label style="font-size:10px;">Import as Category</label>
           <select id="ext_categoryFixed">
+            <option value="Board Games">Board Games</option>
             <option value="Books">Books</option>
             <option value="Comics">Comics</option>
             <option value="Movies">Movies</option>
             <option value="TV Shows">TV Shows</option>
             <option value="Video Games">Video Games</option>
-            <option value="Board Games">Board Games</option>
           </select>
         </div>
         <div class="field">
@@ -1552,12 +1554,12 @@ select option{
       <label>Media Type</label>
       <select id="j_categoryFilter">
         <option value="">All Categories</option>
+        <option value="Board Games">Board Games</option>
         <option value="Books">Books</option>
         <option value="Comics">Comics</option>
         <option value="Movies">Movies</option>
         <option value="TV Shows">TV Shows</option>
         <option value="Video Games">Video Games</option>
-        <option value="Board Games">Board Games</option>
       </select>
     </div>
     <div class="field">
@@ -1668,12 +1670,12 @@ select option{
     <div class="field">
       <label>Category</label>
       <select id="goal_category">
+        <option value="Board Games">Board Games</option>
         <option value="Books">Books</option>
         <option value="Comics">Comics</option>
         <option value="Movies">Movies</option>
         <option value="TV Shows">TV Shows</option>
         <option value="Video Games">Video Games</option>
-        <option value="Board Games">Board Games</option>
       </select>
     </div>
     <div class="field" id="goalsPagesField">
@@ -1707,12 +1709,12 @@ select option{
     <div class="field">
       <label>Category</label>
       <select id="f_category">
+        <option value="Board Games">Board Games</option>
         <option value="Books">Books</option>
         <option value="Comics">Comics</option>
         <option value="Movies">Movies</option>
         <option value="TV Shows">TV Shows</option>
         <option value="Video Games">Video Games</option>
-        <option value="Board Games">Board Games</option>
       </select>
     </div>
     <div class="field" id="creatorField">
@@ -1819,9 +1821,15 @@ select option{
           <input type="number" id="f_playTimeMax" min="1" placeholder="e.g. 60">
         </div>
       </div>
-      <div class="field">
-        <label>Game Manual URL</label>
-        <input type="text" id="f_manualUrl" placeholder="Link to the rulebook/manual PDF or webpage">
+      <div class="field-row">
+        <div class="field">
+          <label>Minimum Age</label>
+          <input type="number" id="f_minAge" min="0" placeholder="e.g. 10">
+        </div>
+        <div class="field">
+          <label>Game Manual URL</label>
+          <input type="text" id="f_manualUrl" placeholder="Link to the rulebook/manual PDF or webpage">
+        </div>
       </div>
     </div>
     <div class="field">
@@ -1920,11 +1928,11 @@ select option{
       <p class="lookup-status hidden" id="ratingReminder" style="color:var(--gold); margin-top:6px;">✎ Now that it's finished — don't forget to rate it and jot down your thoughts below!</p>
     </div>
     <div class="field-row">
-      <div class="field">
+      <div class="field" id="genreField">
         <label>Genre</label>
         <input type="text" id="f_genre" placeholder="e.g. Fantasy">
       </div>
-      <div class="field">
+      <div class="field" id="priorityField">
         <label>Priority</label>
         <select id="f_priority">
           <option value="">—</option>
@@ -1948,7 +1956,7 @@ select option{
       <label>Cost</label>
       <input type="number" id="f_cost" min="0" step="0.01" placeholder="e.g. 12.99">
     </div>
-    <div class="field">
+    <div class="field" id="quoteField">
       <label id="f_quote_label">Favorite Quote</label>
       <textarea id="f_quote" placeholder="A line worth remembering…"></textarea>
     </div>
@@ -2019,7 +2027,7 @@ select option{
 <!-- /#appRoot -->
 
 <script>
-const CATEGORIES = ["Books","Comics","Movies","TV Shows","Video Games","Board Games"];
+const CATEGORIES = ["Board Games","Books","Comics","Movies","TV Shows","Video Games"];
 const CAT_COLOR = {
   "Video Games": "var(--c-games)",
   "Books": "var(--c-books)",
@@ -2210,6 +2218,24 @@ function statusClass(status){
   return '';
 }
 
+// Board Games show "Wishlist"/"Owned" instead of "Backlog"/"Completed" —
+// and once a game has actually been rated (meaning it's been played),
+// "Owned" gives way to "Played", with a count if there's play history,
+// since knowing you own something is less useful once you've actually
+// tried it.
+function statusDisplayLabel(item){
+  if(item.category !== 'Board Games') return item.status;
+  if(item.status === 'Completed'){
+    if(item.rating > 0){
+      const plays = Array.isArray(item.playSessions) ? item.playSessions.length : 0;
+      return plays > 0 ? `Played ${plays}×` : 'Played';
+    }
+    return 'Owned';
+  }
+  if(item.status === 'Backlog') return 'Wishlist';
+  return item.status;
+}
+
 function getFiltered(){
   let list = items.slice();
   if(activeTab !== 'All') list = list.filter(i => i.category === activeTab);
@@ -2232,6 +2258,8 @@ function getFiltered(){
   else if(sort === 'playtime_desc') list.sort((a,b)=> sortByNumber(getPlayTimeValue(a), getPlayTimeValue(b), true));
   else if(sort === 'players_asc') list.sort((a,b)=> sortByNumber(getPlayerCountValue(a), getPlayerCountValue(b), false));
   else if(sort === 'players_desc') list.sort((a,b)=> sortByNumber(getPlayerCountValue(a), getPlayerCountValue(b), true));
+  else if(sort === 'minage_asc') list.sort((a,b)=> sortByNumber(isNaN(parseFloat(a.minAge)) ? null : parseFloat(a.minAge), isNaN(parseFloat(b.minAge)) ? null : parseFloat(b.minAge), false));
+  else if(sort === 'minage_desc') list.sort((a,b)=> sortByNumber(isNaN(parseFloat(a.minAge)) ? null : parseFloat(a.minAge), isNaN(parseFloat(b.minAge)) ? null : parseFloat(b.minAge), true));
   else list.sort((a,b)=> b.createdAt - a.createdAt);
   return list;
 }
@@ -2320,9 +2348,10 @@ function renderCardItem(item, idx){
               ${item.runtime ? `<div class="book-meta">${escapeHtml(formatRuntime(item.runtime))}</div>` : ''}
               ${item.hoursPlayed ? `<div class="book-meta">${escapeHtml(item.hoursPlayed)}h played</div>` : ''}
               ${(item.platform || item.gameFormat) ? `<div class="book-meta">${[item.platform || '', item.gameFormat || '', (item.platform === 'PC' && item.platformLauncher) ? item.platformLauncher : ''].filter(Boolean).map(escapeHtml).join(' · ')}</div>` : ''}
-              ${(item.minPlayers || item.maxPlayers || item.playTimeMin || item.playTimeMax) ? `<div class="book-meta">${[
+              ${(item.minPlayers || item.maxPlayers || item.playTimeMin || item.playTimeMax || item.minAge) ? `<div class="book-meta">${[
                 (item.minPlayers || item.maxPlayers) ? `${item.minPlayers||'?'}${(item.maxPlayers && item.maxPlayers !== item.minPlayers) ? '–'+item.maxPlayers : ''} players` : '',
-                (item.playTimeMin || item.playTimeMax) ? `${item.playTimeMin||'?'}${(item.playTimeMax && item.playTimeMax !== item.playTimeMin) ? '–'+item.playTimeMax : ''} min` : ''
+                (item.playTimeMin || item.playTimeMax) ? `${item.playTimeMin||'?'}${(item.playTimeMax && item.playTimeMax !== item.playTimeMin) ? '–'+item.playTimeMax : ''} min` : '',
+                item.minAge ? `Ages ${item.minAge}+` : ''
               ].filter(Boolean).map(escapeHtml).join(' · ')}</div>` : ''}
               ${item.manualUrl ? `<div class="book-meta"><a href="${escapeHtml(item.manualUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:inherit; text-decoration:underline;">📄 Manual</a></div>` : ''}
               ${(item.signedCopy || item.specialEdition) ? `<div class="book-meta">${[item.signedCopy ? '✒ Signed' : '', item.specialEdition ? `★ Special Edition${item.specialEditionDetail ? ' — ' + escapeHtml(item.specialEditionDetail) : ''}` : ''].filter(Boolean).join(' · ')}</div>` : ''}
@@ -2338,7 +2367,7 @@ function renderCardItem(item, idx){
           ${item.notes ? `<div class="notes">${escapeHtml(item.notes)}</div>` : ''}
           ${buildChipsHtml(item)}
           <div class="status-row">
-            <span class="status-badge ${statusClass(item.status)}">${item.status}</span>
+            <span class="status-badge ${statusClass(item.status)}">${statusDisplayLabel(item)}</span>
             <div class="card-actions">
               ${item.status === 'In Progress' ? `<button class="icon-btn quick-update-btn" data-id="${item.id}" title="Update progress">⟳</button>` : ''}
               <button class="icon-btn edit-btn" data-id="${item.id}" title="Edit">✎</button>
@@ -2423,10 +2452,19 @@ function showToast(message, icon){
   }, 4000);
 }
 
+// What counts as "something to pick from" for Surprise Me / Recommend.
+// For everything else, that's the Backlog (things not yet started). For
+// Board Games it's the opposite — an owned game is endlessly replayable,
+// so the useful question is "what should we play tonight," not "what
+// haven't I tried yet," which is what the Wishlist would represent.
+function isPickableForRandom(item){
+  return item.category === 'Board Games' ? item.status === 'Completed' : item.status === 'Backlog';
+}
+
 document.getElementById('surpriseMeBtn').addEventListener('click', ()=>{
-  const pool = items.filter(i => i.status === 'Backlog' && (activeTab === 'All' || i.category === activeTab));
+  const pool = items.filter(i => isPickableForRandom(i) && (activeTab === 'All' || i.category === activeTab));
   if(pool.length === 0){
-    showToast(activeTab === 'All' ? 'Nothing in your Backlog right now!' : `Nothing in your ${activeTab} Backlog right now!`, '🎲');
+    showToast(activeTab === 'All' ? 'Nothing to pick from right now!' : `Nothing to pick from in ${activeTab} right now!`, '🎲');
     return;
   }
   const pick = pool[Math.floor(Math.random() * pool.length)];
@@ -2437,14 +2475,14 @@ document.getElementById('surpriseMeBtn').addEventListener('click', ()=>{
 /* ---------- Recommendations ---------- */
 function computeRecommendation(categoryFilter){
   if(categoryFilter === 'wildcard'){
-    const pool = items.filter(i => i.status === 'Backlog');
+    const pool = items.filter(i => isPickableForRandom(i));
     if(pool.length === 0) return null;
     const item = pool[Math.floor(Math.random() * pool.length)];
     return { item, reason: '🎲 Wildcard pick — pure chance, no taste-matching involved!' };
   }
 
   const scope = categoryFilter ? items.filter(i => i.category === categoryFilter) : items;
-  const backlogPool = scope.filter(i => i.status === 'Backlog');
+  const backlogPool = scope.filter(i => isPickableForRandom(i));
   if(backlogPool.length === 0) return null;
 
   const loved = scope.filter(i => i.status === 'Completed' && i.rating >= 4);
@@ -2889,15 +2927,25 @@ function toggleBookFields(){
   const isScreen = isTV || category === 'Movies';
   document.getElementById('f_quote_label').textContent = isScreen ? 'Notes' : 'Favorite Quote';
 
-  // Board Games use "Wishlist / Owned / Sold" instead of the usual
-  // Backlog/In Progress/Completed/Dropped wording — same underlying
-  // values (so everything else in the app that groups by status still
-  // works unchanged), just relabeled to fit a collection rather than
-  // something with a linear reading/watching progress.
+  // Genre, Priority, and Favorite Quote don't really apply to a board
+  // game catalogue entry, so they're hidden for that category.
+  document.getElementById('genreField').classList.toggle('hidden', isBoardGame);
+  document.getElementById('priorityField').classList.toggle('hidden', isBoardGame);
+  document.getElementById('quoteField').classList.toggle('hidden', isBoardGame);
+
+  // Board Games only need two states — Wishlist and Owned — rather than
+  // the usual four. Same underlying "Backlog"/"Completed" values (so
+  // everything else that groups by status still works unchanged), just
+  // relabeled, with "In Progress" and "Dropped" hidden entirely for this
+  // category since they don't really apply to something you either own
+  // or don't.
   document.getElementById('statusOpt_Backlog').textContent = isBoardGame ? 'Wishlist' : 'Backlog';
-  document.getElementById('statusOpt_InProgress').textContent = isBoardGame ? 'On Order' : 'In Progress';
   document.getElementById('statusOpt_Completed').textContent = isBoardGame ? 'Owned' : 'Completed';
-  document.getElementById('statusOpt_Dropped').textContent = isBoardGame ? 'Sold / Given Away' : 'Dropped';
+  document.getElementById('statusOpt_InProgress').classList.toggle('hidden', isBoardGame);
+  document.getElementById('statusOpt_Dropped').classList.toggle('hidden', isBoardGame);
+  if(isBoardGame && (document.getElementById('f_status').value === 'In Progress' || document.getElementById('f_status').value === 'Dropped')){
+    document.getElementById('f_status').value = 'Backlog';
+  }
 
   // The "Log a Re-Read/Rewatch/Replay" flow only makes sense for an
   // existing item that's already Completed — logging a repeat of
@@ -3005,6 +3053,7 @@ function openModal(id){
     document.getElementById('f_playTimeMin').value = item.playTimeMin || '';
     document.getElementById('f_playTimeMax').value = item.playTimeMax || '';
     document.getElementById('f_manualUrl').value = item.manualUrl || '';
+    document.getElementById('f_minAge').value = item.minAge || '';
     document.getElementById('f_priority').value = item.priority || '';
     document.getElementById('f_tags').value = item.tags || '';
     document.getElementById('f_source').value = item.source || '';
@@ -3054,6 +3103,7 @@ function openModal(id){
     document.getElementById('f_playTimeMin').value = '';
     document.getElementById('f_playTimeMax').value = '';
     document.getElementById('f_manualUrl').value = '';
+    document.getElementById('f_minAge').value = '';
     document.getElementById('f_priority').value = '';
     document.getElementById('f_tags').value = '';
     document.getElementById('f_source').value = '';
@@ -3152,6 +3202,7 @@ document.getElementById('saveBtn').addEventListener('click', async ()=>{
     playTimeMin: isBoardGame ? document.getElementById('f_playTimeMin').value.trim() : '',
     playTimeMax: isBoardGame ? document.getElementById('f_playTimeMax').value.trim() : '',
     manualUrl: isBoardGame ? document.getElementById('f_manualUrl').value.trim() : '',
+    minAge: isBoardGame ? document.getElementById('f_minAge').value.trim() : '',
     playSessions: previousItem ? (previousItem.playSessions || []) : [],
     seasons: isTV ? workingSeasons.map(s => ({
       number: parseInt(s.number) || 0,
@@ -3539,6 +3590,7 @@ function renderLookupResults(matches, title, isBook){
         if(m.maxPlayers) document.getElementById('f_maxPlayers').value = m.maxPlayers;
         if(m.playTimeMin) document.getElementById('f_playTimeMin').value = m.playTimeMin;
         if(m.playTimeMax) document.getElementById('f_playTimeMax').value = m.playTimeMax;
+        if(m.minAge) document.getElementById('f_minAge').value = m.minAge;
       }
       if(m.description){
         const notesEl = document.getElementById('f_notes');
@@ -3771,7 +3823,8 @@ async function lookupBggFree(title){
         minPlayers: getVal('minplayers') || '',
         maxPlayers: getVal('maxplayers') || '',
         playTimeMin: getVal('minplaytime') || '',
-        playTimeMax: getVal('maxplaytime') || ''
+        playTimeMax: getVal('maxplaytime') || '',
+        minAge: getVal('minage') || ''
       };
     });
   }catch(e){
@@ -4553,7 +4606,7 @@ function renderAchievements(){
   const unlockedCount = all.filter(a => a.unlocked).length;
   document.getElementById('achievementsSummary').textContent = `${unlockedCount} / ${all.length} unlocked`;
 
-  const groups = filter ? [filter] : ['Books','Comics','Movies','TV Shows','Video Games','Overall'];
+  const groups = filter ? [filter] : ['Board Games','Books','Comics','Movies','TV Shows','Video Games','Overall'];
 
   let html = '';
   groups.forEach(cat => {
@@ -5462,12 +5515,12 @@ function csvEscape(val){
 }
 
 function buildLibraryCSV(){
-  const headers = ['Title','Category','Creator','Status','Rating','Year','Format','AuthorGender','PageCount','CurrentPage','ISBN','PublishDate','Platform','GameFormat','PlatformLauncher','HoursPlayed','MinPlayers','MaxPlayers','PlayTimeMin','PlayTimeMax','ManualUrl','PlaySessions','SignedCopy','SpecialEdition','SpecialEditionDetail','Seasons','DateStarted','DateFinished','Notes'];
+  const headers = ['Title','Category','Creator','Status','Rating','Year','Format','AuthorGender','PageCount','CurrentPage','ISBN','PublishDate','Platform','GameFormat','PlatformLauncher','HoursPlayed','MinPlayers','MaxPlayers','PlayTimeMin','PlayTimeMax','MinAge','ManualUrl','PlaySessions','SignedCopy','SpecialEdition','SpecialEditionDetail','Seasons','DateStarted','DateFinished','Notes'];
   const rows = items.map(i => [
     i.title, i.category, i.creator, i.status, i.rating, i.year, i.format, i.authorGender || '',
     i.pageCount, i.currentPage, i.isbn, i.publishDate,
     i.platform || '', i.gameFormat || '', i.platformLauncher || '', i.hoursPlayed || '',
-    i.minPlayers || '', i.maxPlayers || '', i.playTimeMin || '', i.playTimeMax || '', i.manualUrl || '',
+    i.minPlayers || '', i.maxPlayers || '', i.playTimeMin || '', i.playTimeMax || '', i.minAge || '', i.manualUrl || '',
     Array.isArray(i.playSessions) ? i.playSessions.map(s => `${s.date}${s.winner ? ' (winner: '+s.winner+')' : ''}`).join('; ') : '',
     i.signedCopy ? 'Yes' : '', i.specialEdition ? 'Yes' : '', i.specialEditionDetail || '',
     Array.isArray(i.seasons) ? i.seasons.map(s => `S${s.number}:${s.episodesWatched}${s.totalEpisodes ? '/'+s.totalEpisodes : ''}${s.completed ? ' (done)' : ''}`).join('; ') : '',
@@ -5551,7 +5604,7 @@ function blankItem(){
     id: '', title: '', category: '', creator: '', year: '', coverUrl: '', isbn: '',
     pageCount: '', currentPage: '', publishDate: '', format: '', authorGender: '', runtime: '',
     hoursPlayed: '', platform: '', gameFormat: '', platformLauncher: '', seasons: [], totalIssues: '', currentIssue: '', currentIssuePage: '',
-    minPlayers: '', maxPlayers: '', playTimeMin: '', playTimeMax: '', manualUrl: '', playSessions: [],
+    minPlayers: '', maxPlayers: '', playTimeMin: '', playTimeMax: '', manualUrl: '', minAge: '', playSessions: [],
     progressPercent: '', status: 'Backlog', dateStarted: '', dateFinished: '', rating: 0,
     genre: '', seriesName: '', seriesNumber: '', seriesTotal: '', priority: '', tags: '',
     source: '', cost: '', signedCopy: false, specialEdition: false, specialEditionDetail: '',
@@ -5660,7 +5713,7 @@ document.getElementById('importCsvFile').addEventListener('change', async (e)=>{
         rating: parseFloat(r.Rating) || 0, year: r.Year || '', format: r.Format || '',
         authorGender: r.AuthorGender || '',
         platform: r.Platform || '', gameFormat: r.GameFormat || '', platformLauncher: r.PlatformLauncher || '', hoursPlayed: r.HoursPlayed || '',
-        minPlayers: r.MinPlayers || '', maxPlayers: r.MaxPlayers || '', playTimeMin: r.PlayTimeMin || '', playTimeMax: r.PlayTimeMax || '', manualUrl: r.ManualUrl || '',
+        minPlayers: r.MinPlayers || '', maxPlayers: r.MaxPlayers || '', playTimeMin: r.PlayTimeMin || '', playTimeMax: r.PlayTimeMax || '', minAge: r.MinAge || '', manualUrl: r.ManualUrl || '',
         pageCount: r.PageCount || '', currentPage: r.CurrentPage || '', isbn: r.ISBN || '',
         publishDate: r.PublishDate || '', dateStarted: r.DateStarted || '', dateFinished: r.DateFinished || '',
         notes: r.Notes || ''
