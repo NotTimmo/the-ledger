@@ -1743,6 +1743,39 @@ select option{
         <label>Hours Played</label>
         <input type="number" id="f_hoursPlayed" min="0" step="0.5" placeholder="e.g. 24.5">
       </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Platform</label>
+          <select id="f_platform">
+            <option value="">Select platform…</option>
+            <option value="PS5">PS5</option>
+            <option value="PS4">PS4</option>
+            <option value="Switch">Switch</option>
+            <option value="Switch 2">Switch 2</option>
+            <option value="PC">PC</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Format</label>
+          <select id="f_gameFormat">
+            <option value="">Select format…</option>
+            <option value="Physical">Physical</option>
+            <option value="Digital">Digital</option>
+          </select>
+        </div>
+      </div>
+      <div class="field hidden" id="platformLauncherField">
+        <label>Launcher</label>
+        <select id="f_platformLauncher">
+          <option value="">Select launcher…</option>
+          <option value="Steam">Steam</option>
+          <option value="Ubisoft">Ubisoft</option>
+          <option value="EA">EA</option>
+          <option value="Epic Games">Epic Games</option>
+          <option value="GOG">GOG</option>
+          <option value="Battle.net">Battle.net</option>
+        </select>
+      </div>
     </div>
     <div class="field">
       <label>Cover Image URL</label>
@@ -2164,6 +2197,7 @@ function renderCardItem(item, idx){
               ${item.totalIssues ? `<div class="book-meta">${escapeHtml(item.totalIssues)} issue${item.totalIssues == 1 ? '' : 's'}</div>` : ''}
               ${item.runtime ? `<div class="book-meta">${escapeHtml(formatRuntime(item.runtime))}</div>` : ''}
               ${item.hoursPlayed ? `<div class="book-meta">${escapeHtml(item.hoursPlayed)}h played</div>` : ''}
+              ${(item.platform || item.gameFormat) ? `<div class="book-meta">${[item.platform || '', item.gameFormat || '', (item.platform === 'PC' && item.platformLauncher) ? item.platformLauncher : ''].filter(Boolean).map(escapeHtml).join(' · ')}</div>` : ''}
               ${(item.signedCopy || item.specialEdition) ? `<div class="book-meta">${[item.signedCopy ? '✒ Signed' : '', item.specialEdition ? `★ Special Edition${item.specialEditionDetail ? ' — ' + escapeHtml(item.specialEditionDetail) : ''}` : ''].filter(Boolean).join(' · ')}</div>` : ''}
             </div>
             <div class="card-num">${catNum(idx)}</div>
@@ -2807,6 +2841,10 @@ function openModal(id){
     document.getElementById('f_currentIssuePage').value = item.currentIssuePage || '';
     document.getElementById('f_runtime').value = item.runtime || '';
     document.getElementById('f_hoursPlayed').value = item.hoursPlayed || '';
+    document.getElementById('f_platform').value = item.platform || '';
+    document.getElementById('f_gameFormat').value = item.gameFormat || '';
+    document.getElementById('f_platformLauncher').value = item.platformLauncher || '';
+    document.getElementById('platformLauncherField').classList.toggle('hidden', item.platform !== 'PC');
     document.getElementById('f_priority').value = item.priority || '';
     document.getElementById('f_tags').value = item.tags || '';
     document.getElementById('f_source').value = item.source || '';
@@ -2847,6 +2885,10 @@ function openModal(id){
     document.getElementById('f_currentIssuePage').value = '';
     document.getElementById('f_runtime').value = '';
     document.getElementById('f_hoursPlayed').value = '';
+    document.getElementById('f_platform').value = '';
+    document.getElementById('f_gameFormat').value = '';
+    document.getElementById('f_platformLauncher').value = '';
+    document.getElementById('platformLauncherField').classList.add('hidden');
     document.getElementById('f_priority').value = '';
     document.getElementById('f_tags').value = '';
     document.getElementById('f_source').value = '';
@@ -2881,6 +2923,9 @@ document.getElementById('cancelBtn').addEventListener('click', closeModal);
 document.getElementById('f_category').addEventListener('change', toggleBookFields);
 document.getElementById('f_specialEdition').addEventListener('change', ()=>{
   document.getElementById('specialEditionDetailField').classList.toggle('hidden', !document.getElementById('f_specialEdition').checked);
+});
+document.getElementById('f_platform').addEventListener('change', ()=>{
+  document.getElementById('platformLauncherField').classList.toggle('hidden', document.getElementById('f_platform').value !== 'PC');
 });
 document.getElementById('f_cover').addEventListener('input', updateCoverPreview);
 let isbnCoverDebounce = null;
@@ -2933,6 +2978,9 @@ document.getElementById('saveBtn').addEventListener('click', async ()=>{
     authorGender: isBook ? document.getElementById('f_authorGender').value : '',
     runtime: isMovie ? document.getElementById('f_runtime').value.trim() : '',
     hoursPlayed: isGame ? document.getElementById('f_hoursPlayed').value.trim() : '',
+    platform: isGame ? document.getElementById('f_platform').value : '',
+    gameFormat: isGame ? document.getElementById('f_gameFormat').value : '',
+    platformLauncher: (isGame && document.getElementById('f_platform').value === 'PC') ? document.getElementById('f_platformLauncher').value : '',
     seasons: isTV ? workingSeasons.map(s => ({
       number: parseInt(s.number) || 0,
       episodesWatched: parseInt(s.episodesWatched) || 0,
@@ -5035,10 +5083,11 @@ function csvEscape(val){
 }
 
 function buildLibraryCSV(){
-  const headers = ['Title','Category','Creator','Status','Rating','Year','Format','AuthorGender','PageCount','CurrentPage','ISBN','PublishDate','SignedCopy','SpecialEdition','SpecialEditionDetail','Seasons','DateStarted','DateFinished','Notes'];
+  const headers = ['Title','Category','Creator','Status','Rating','Year','Format','AuthorGender','PageCount','CurrentPage','ISBN','PublishDate','Platform','GameFormat','PlatformLauncher','HoursPlayed','SignedCopy','SpecialEdition','SpecialEditionDetail','Seasons','DateStarted','DateFinished','Notes'];
   const rows = items.map(i => [
     i.title, i.category, i.creator, i.status, i.rating, i.year, i.format, i.authorGender || '',
     i.pageCount, i.currentPage, i.isbn, i.publishDate,
+    i.platform || '', i.gameFormat || '', i.platformLauncher || '', i.hoursPlayed || '',
     i.signedCopy ? 'Yes' : '', i.specialEdition ? 'Yes' : '', i.specialEditionDetail || '',
     Array.isArray(i.seasons) ? i.seasons.map(s => `S${s.number}:${s.episodesWatched}${s.totalEpisodes ? '/'+s.totalEpisodes : ''}${s.completed ? ' (done)' : ''}`).join('; ') : '',
     i.dateStarted, i.dateFinished, i.notes
@@ -5120,7 +5169,7 @@ function blankItem(){
   return {
     id: '', title: '', category: '', creator: '', year: '', coverUrl: '', isbn: '',
     pageCount: '', currentPage: '', publishDate: '', format: '', authorGender: '', runtime: '',
-    hoursPlayed: '', seasons: [], totalIssues: '', currentIssue: '', currentIssuePage: '',
+    hoursPlayed: '', platform: '', gameFormat: '', platformLauncher: '', seasons: [], totalIssues: '', currentIssue: '', currentIssuePage: '',
     progressPercent: '', status: 'Backlog', dateStarted: '', dateFinished: '', rating: 0,
     genre: '', seriesName: '', seriesNumber: '', seriesTotal: '', priority: '', tags: '',
     source: '', cost: '', signedCopy: false, specialEdition: false, specialEditionDetail: '',
@@ -5228,6 +5277,7 @@ document.getElementById('importCsvFile').addEventListener('change', async (e)=>{
         status: r.Status && ['Backlog','In Progress','Completed','Dropped'].includes(r.Status) ? r.Status : 'Backlog',
         rating: parseFloat(r.Rating) || 0, year: r.Year || '', format: r.Format || '',
         authorGender: r.AuthorGender || '',
+        platform: r.Platform || '', gameFormat: r.GameFormat || '', platformLauncher: r.PlatformLauncher || '', hoursPlayed: r.HoursPlayed || '',
         pageCount: r.PageCount || '', currentPage: r.CurrentPage || '', isbn: r.ISBN || '',
         publishDate: r.PublishDate || '', dateStarted: r.DateStarted || '', dateFinished: r.DateFinished || '',
         notes: r.Notes || ''
