@@ -494,8 +494,8 @@ select option{
 .star-slot{ position:relative; display:inline-block; line-height:1; }
 .star-bg{ display:block; color: rgba(35,38,47,0.22); }
 .star-fg{ position:absolute; top:0; left:0; overflow:hidden; white-space:nowrap; color: var(--rust); }
-.star-row.size-sm .star-slot{ width:16px; height:16px; font-size:15px; }
-.star-row.size-lg .star-slot{ width:24px; height:24px; font-size:22px; }
+.star-row.size-sm .star-slot{ width:20px; height:20px; font-size:19px; }
+.star-row.size-lg .star-slot{ width:32px; height:32px; font-size:30px; }
 .rating-value{
   font-family: 'IBM Plex Mono', monospace;
   font-size: 11px;
@@ -1495,6 +1495,15 @@ select option{
       <button class="lookup-btn" type="button" id="clearDataBtn" style="border-color:var(--rust); color:var(--rust);">🗑 Clear All Data</button>
       <p class="lookup-status" id="clearDataStatus">Wipes everything saved in this browser (library, journal, goals) so you can re-import fresh. Only affects this local test copy — nothing in Supabase.</p>
     </div>
+    <div class="field" style="margin-top:20px; padding-top:16px; border-top:1px solid rgba(180,85,59,0.35);">
+      <label style="color:var(--rust);">Danger Zone</label>
+      <p class="lookup-status" style="margin-bottom:10px;">Permanently deletes your entire library, journal, and goals — everything, for good. This cannot be undone. Consider using Export Data above first.</p>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <input type="text" id="deleteAllConfirmInput" placeholder="Type DELETE to confirm" style="max-width:220px;">
+        <button class="lookup-btn" type="button" id="deleteAllDataBtn" disabled style="border-color:var(--rust); color:var(--rust); opacity:0.5;">🗑 Delete All Data</button>
+      </div>
+      <p class="lookup-status" id="deleteAllStatus"></p>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="settingsCancelBtn">Cancel</button>
       <button class="btn btn-primary" id="settingsSaveBtn">Save</button>
@@ -2031,6 +2040,21 @@ function valueFromEvent(e, container){
   let frac = (x / rect.width) * 5;
   frac = Math.max(0, Math.min(5, frac));
   return Math.round(frac * 4) / 4;
+}
+
+// Live preview while hovering a star row with the mouse: shows the fill
+// state you'd get if you clicked right now, then snaps back to the real
+// current value when the mouse leaves. Makes it much easier to land on
+// the quarter-star you actually want instead of clicking blind. Touch
+// devices don't get a hover state, so this only helps mouse users — taps
+// still work exactly as before via the click handler.
+function attachStarHoverPreview(containerEl, getCurrentValue){
+  containerEl.addEventListener('mousemove', (e)=>{
+    containerEl.innerHTML = starSlotsHtml(valueFromEvent(e, containerEl));
+  });
+  containerEl.addEventListener('mouseleave', ()=>{
+    containerEl.innerHTML = starSlotsHtml(getCurrentValue());
+  });
 }
 
 function renderRatingInput(){
@@ -2669,6 +2693,8 @@ function wireSectionInteractions(){
       await saveItem(item);
       render();
     });
+    const cardItem = items.find(i => i.id === rowEl.dataset.id);
+    attachStarHoverPreview(rowEl, () => (cardItem ? cardItem.rating : 0) || 0);
   });
 }
 
@@ -3062,6 +3088,7 @@ document.getElementById('f_rating_stars').addEventListener('click', (e)=>{
   renderRatingInput();
   updateRatingReminder();
 });
+attachStarHoverPreview(document.getElementById('f_rating_stars'), () => currentRating);
 document.getElementById('f_rating_clear').addEventListener('click', ()=>{
   currentRating = 0;
   renderRatingInput();
@@ -3117,6 +3144,7 @@ document.getElementById('reread_rating_stars').addEventListener('click', (e)=>{
   rereadRating = valueFromEvent(e, document.getElementById('reread_rating_stars'));
   renderRereadRating();
 });
+attachStarHoverPreview(document.getElementById('reread_rating_stars'), () => rereadRating);
 
 document.getElementById('logRereadBtn').addEventListener('click', ()=>{
   const item = editingId ? items.find(i => i.id === editingId) : null;
@@ -3636,6 +3664,7 @@ document.getElementById('j_rating_stars').addEventListener('click', (e)=>{
   journalFinishRating = valueFromEvent(e, document.getElementById('j_rating_stars'));
   renderJournalFinishRating();
 });
+attachStarHoverPreview(document.getElementById('j_rating_stars'), () => journalFinishRating);
 
 function updateJournalFieldVisibility(){
   const type = document.getElementById('j_type').value;
@@ -3883,6 +3912,7 @@ document.getElementById('qu_rating_stars').addEventListener('click', (e)=>{
   quickFinishRating = valueFromEvent(e, document.getElementById('qu_rating_stars'));
   renderQuFinishRating();
 });
+attachStarHoverPreview(document.getElementById('qu_rating_stars'), () => quickFinishRating);
 document.getElementById('qu_markFinished').addEventListener('change', (e)=>{
   const show = e.target.checked;
   document.getElementById('qu_finishRatingField').classList.toggle('hidden', !show);
@@ -5059,6 +5089,10 @@ document.getElementById('settingsBtn').addEventListener('click', async ()=>{
   const key = window.electronAPI ? await window.electronAPI.getApiKey() : '';
   document.getElementById('apiKeyInput').value = key || '';
   document.getElementById('devClearField').classList.toggle('hidden', !window.DEV_SKIP_AUTH);
+  document.getElementById('deleteAllConfirmInput').value = '';
+  document.getElementById('deleteAllDataBtn').disabled = true;
+  document.getElementById('deleteAllDataBtn').style.opacity = '0.5';
+  document.getElementById('deleteAllStatus').textContent = '';
   document.getElementById('settingsOverlay').classList.remove('hidden');
 });
 document.getElementById('settingsCancelBtn').addEventListener('click', ()=>{
@@ -5453,6 +5487,45 @@ document.getElementById('clearDataBtn').addEventListener('click', async ()=>{
   keys.forEach(k => localStorage.removeItem(k));
   statusEl.textContent = `Cleared ${keys.length} item(s). Reloading…`;
   setTimeout(()=> window.location.reload(), 600);
+});
+
+document.getElementById('deleteAllConfirmInput').addEventListener('input', (e)=>{
+  const btn = document.getElementById('deleteAllDataBtn');
+  const matches = e.target.value === 'DELETE';
+  btn.disabled = !matches;
+  btn.style.opacity = matches ? '1' : '0.5';
+});
+
+document.getElementById('deleteAllDataBtn').addEventListener('click', async ()=>{
+  const statusEl = document.getElementById('deleteAllStatus');
+  const btn = document.getElementById('deleteAllDataBtn');
+  const input = document.getElementById('deleteAllConfirmInput');
+  if(input.value !== 'DELETE') return; // belt-and-braces — button should already be disabled otherwise
+
+  btn.disabled = true;
+  statusEl.textContent = `Deleting ${items.length} item(s) and ${journalEntries.length} journal entr${journalEntries.length === 1 ? 'y' : 'ies'}…`;
+
+  try{
+    for(const item of items.slice()){
+      try{ await window.storage.delete('items:'+item.id, false); }catch(e){}
+    }
+    for(const entry of journalEntries.slice()){
+      try{ await window.storage.delete('journal:'+entry.id, false); }catch(e){}
+    }
+    try{ await window.storage.delete('settings:goals', false); }catch(e){}
+
+    items = [];
+    journalEntries = [];
+    input.value = '';
+    statusEl.textContent = 'Everything has been deleted.';
+    render();
+  }catch(e){
+    console.error('Delete all data failed', e);
+    statusEl.textContent = 'Something went wrong partway through — some data may remain. Check your library and try again if needed.';
+  }finally{
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+  }
 });
 
 async function initApp(){
