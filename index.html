@@ -352,7 +352,7 @@ select option{
 
 .grid{
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: 18px;
   padding-bottom: 8px;
 }
@@ -413,7 +413,7 @@ select option{
 }
 .list-row .lr-title-col{ flex:1; min-width:0; font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .list-row .lr-creator-col{ width:160px; flex-shrink:0; font-size:12px; color: rgba(35,38,47,0.6); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.list-row .lr-rating-col{ width:70px; flex-shrink:0; font-family:'IBM Plex Mono',monospace; font-size:11px; color: var(--rust); }
+.list-row .lr-rating-col{ width:70px; flex-shrink:0; font-family:'IBM Plex Mono',monospace; font-size:11px; color: var(--gold); }
 .list-row .lr-status-col{ width:100px; flex-shrink:0; }
 .list-row .lr-progress-col{ width:90px; flex-shrink:0; }
 
@@ -426,10 +426,12 @@ select option{
   box-shadow: 0 6px 18px rgba(0,0,0,0.28);
   border-left: 4px solid var(--cat-color, var(--gold));
   transition: transform .12s ease, box-shadow .12s ease;
+  display: flex;
+  flex-direction: column;
 }
 .card:hover{ transform: translateY(-2px); box-shadow: 0 10px 22px rgba(0,0,0,0.34); }
 
-.card-body{ display:flex; gap:12px; }
+.card-body{ display:flex; gap:12px; flex:1; }
 .cover-wrap{ flex-shrink:0; width:64px; }
 .card-cover{
   width:64px; height:96px;
@@ -508,7 +510,7 @@ select option{
 .season-mini-num{
   font-family: 'IBM Plex Mono', monospace; font-weight: 600; width: 22px; flex-shrink: 0;
 }
-.season-mini-rating{ color: var(--rust); font-family: 'IBM Plex Mono', monospace; flex-shrink: 0; }
+.season-mini-rating{ color: var(--gold); font-family: 'IBM Plex Mono', monospace; flex-shrink: 0; }
 .season-mini-date{ color: rgba(35,38,47,0.4); font-family: 'IBM Plex Mono', monospace; margin-left: auto; flex-shrink: 0; }
 .season-mini-row.unrated{ color: rgba(35,38,47,0.35); }
 
@@ -516,7 +518,7 @@ select option{
 .star-row{ position:relative; display:inline-flex; cursor:pointer; user-select:none; line-height:1; }
 .star-slot{ position:relative; display:inline-block; line-height:1; }
 .star-bg{ display:block; color: rgba(35,38,47,0.22); }
-.star-fg{ position:absolute; top:0; left:0; overflow:hidden; white-space:nowrap; color: var(--rust); }
+.star-fg{ position:absolute; top:0; left:0; overflow:hidden; white-space:nowrap; color: var(--gold); }
 .star-row.size-sm .star-slot{ width:20px; height:20px; font-size:19px; }
 .star-row.size-lg .star-slot{ width:32px; height:32px; font-size:30px; }
 .rating-value{
@@ -529,7 +531,8 @@ select option{
   display:flex;
   justify-content: space-between;
   align-items:center;
-  margin-top: 4px;
+  margin-top: auto;
+  padding-top: 10px;
 }
 .status-badge{
   font-family: 'IBM Plex Mono', monospace;
@@ -890,7 +893,7 @@ select option{
   justify-content:space-between;
   gap: 10px;
 }
-.top-list .tl-rating{ font-family:'IBM Plex Mono',monospace; color: var(--rust); flex-shrink:0; }
+.top-list .tl-rating{ font-family:'IBM Plex Mono',monospace; color: var(--gold); flex-shrink:0; }
 
 .summary-actions{ margin-top: 24px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
 .summary-preview{
@@ -1137,7 +1140,7 @@ select option{
 .top-rated-item{ display:flex; justify-content:space-between; gap:10px; font-size:13px; padding:6px 0; border-bottom:1px solid rgba(35,38,47,0.08); }
 .top-rated-item:last-child{ border-bottom:none; }
 .top-rated-title{ font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.top-rated-rating{ font-family:'IBM Plex Mono', monospace; color:var(--rust); flex-shrink:0; }
+.top-rated-rating{ font-family:'IBM Plex Mono', monospace; color:var(--gold); flex-shrink:0; }
 
 .snapshot-grid{
   display:grid; grid-template-columns:repeat(auto-fit, minmax(90px,1fr));
@@ -4414,7 +4417,7 @@ function renderJournal(){
         <div class="journal-entry" data-id="${e.id}">
           <span class="journal-icon">${displayIcon}</span>
           <div class="journal-entry-body">
-            <div class="journal-entry-title">${e.type === 'note' ? (e.itemTitle ? escapeHtml(e.itemTitle) : 'Note') : titlePart}${repeatBadge}${e.rating ? ` <span style="color:var(--rust); font-family:'IBM Plex Mono',monospace; font-size:12px;">${formatRating(e.rating)} ★</span>` : ''}</div>
+            <div class="journal-entry-title">${e.type === 'note' ? (e.itemTitle ? escapeHtml(e.itemTitle) : 'Note') : titlePart}${repeatBadge}${e.rating ? ` <span style="color:var(--gold); font-family:'IBM Plex Mono',monospace; font-size:12px;">${formatRating(e.rating)} ★</span>` : ''}</div>
             ${e.note ? `<div class="journal-entry-note">${escapeHtml(e.note)}</div>` : ''}
           </div>
           <button class="icon-btn journal-edit-btn" data-id="${e.id}" title="Edit">✎</button>
