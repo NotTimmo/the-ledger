@@ -2619,6 +2619,16 @@ document.getElementById('bulkDeleteBtn').addEventListener('click', async ()=>{
   render();
 });
 
+// Section headers show "Owned"/"Wishlist" instead of "Completed"/"Backlog"
+// when browsing just the Board Games tab — only there, since in "All" or
+// any other single-category view the generic wording is still correct.
+function sectionStatusLabel(status){
+  if(activeTab !== 'Board Games') return status;
+  if(status === 'Backlog') return 'Wishlist';
+  if(status === 'Completed') return 'Owned';
+  return status;
+}
+
 function render(){
   checkForNewAchievements();
   const list = getFiltered();
@@ -2647,7 +2657,7 @@ function render(){
         <button class="section-header" data-status="${g.status}">
           <span class="section-chevron">${collapsed ? '▸' : '▾'}</span>
           <span class="section-dot" style="background:${STATUS_COLOR[g.status]}"></span>
-          <span class="section-title">${g.status}</span>
+          <span class="section-title">${sectionStatusLabel(g.status)}</span>
           <span class="section-count">${g.list.length}</span>
         </button>
         <div class="section-body ${bodyClass} ${collapsed ? 'hidden' : ''}">
