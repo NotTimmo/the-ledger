@@ -496,6 +496,20 @@ select option{
   color: rgba(35,38,47,0.5);
   margin-top: -4px;
 }
+.season-mini-list{
+  display: flex; flex-direction: column; gap: 3px;
+  margin-top: 4px; padding-top: 6px; border-top: 1px solid rgba(35,38,47,0.08);
+}
+.season-mini-row{
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: rgba(35,38,47,0.6);
+}
+.season-mini-num{
+  font-family: 'IBM Plex Mono', monospace; font-weight: 600; width: 26px; flex-shrink: 0;
+}
+.season-mini-rating{ color: var(--rust); font-family: 'IBM Plex Mono', monospace; }
+.season-mini-date{ color: rgba(35,38,47,0.4); font-family: 'IBM Plex Mono', monospace; }
+.season-mini-row.unrated{ color: rgba(35,38,47,0.35); }
 
 .rating-line{ display:flex; align-items:center; gap:7px; }
 .star-row{ position:relative; display:inline-flex; cursor:pointer; user-select:none; line-height:1; }
@@ -720,14 +734,17 @@ select option{
 .remove-cover-btn:hover{ color: var(--rust); }
 .book-fields.hidden{ display:none; }
 .season-row{
-  display:flex; align-items:center; gap:6px; margin-bottom:8px;
+  display:flex; flex-direction:column; gap:6px;
+  padding:8px; border:1px solid rgba(35,38,47,0.15); border-radius:6px; margin-bottom:8px;
 }
-.season-row input[type=number]{
+.season-row-line{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.season-row input[type=number], .season-row input[type=date]{
   padding:7px 8px; border:1px solid rgba(35,38,47,0.2); border-radius:4px; font-size:13px;
 }
 .season-row .season-num{ width:56px; }
 .season-row .season-watched{ width:76px; }
 .season-row .season-total{ width:76px; }
+.season-row .season-date{ width:132px; }
 .season-row label{
   display:flex; align-items:center; gap:4px; font-size:11px; color:rgba(35,38,47,0.6);
   white-space:nowrap;
@@ -735,9 +752,11 @@ select option{
 .season-row label input[type=checkbox]{ width:auto; }
 .season-remove-btn{
   background:none; border:none; color:rgba(35,38,47,0.4); cursor:pointer; font-size:14px; padding:2px 6px;
+  margin-left:auto;
 }
 .season-remove-btn:hover{ color:var(--rust); }
 .season-row-label{ font-family:'IBM Plex Mono', monospace; font-size:10px; color:rgba(35,38,47,0.5); width:16px; }
+.season-rating-value{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:rgba(35,38,47,0.55); }
 .title-row{ display:flex; gap:8px; align-items:flex-end; }
 .title-row .field{ flex:1; margin-bottom:0; }
 .lookup-btn{
@@ -1950,6 +1969,7 @@ select option{
         <button type="button" class="rating-clear" id="f_rating_clear">Clear</button>
       </div>
       <p class="lookup-status hidden" id="ratingReminder" style="color:var(--gold); margin-top:6px;">✎ Now that it's finished — don't forget to rate it and jot down your thoughts below!</p>
+      <p class="lookup-status hidden" id="tvAutoRatingNote" style="margin-top:6px;"></p>
     </div>
     <div class="field-row">
       <div class="field" id="genreField">
@@ -2179,6 +2199,43 @@ function renderRatingInput(){
   document.getElementById('f_rating_value').textContent = formatRating(currentRating) || 'Not rated';
 }
 
+// Averages whichever seasons have actually been rated (skips unrated
+// ones rather than treating them as 0), rounded to the nearest quarter
+// star to match the rating system used everywhere else. Returns null if
+// no seasons have a rating yet.
+function computeTvAverageRating(seasons){
+  const rated = (seasons || []).filter(s => s.rating > 0);
+  if(rated.length === 0) return null;
+  const avg = rated.reduce((sum, s) => sum + s.rating, 0) / rated.length;
+  return Math.round(avg * 4) / 4;
+}
+
+// For TV Shows, once at least one season has been rated, the overall
+// rating becomes an automatic average of the rated seasons rather than
+// something set by hand — clicking the main star row is locked while
+// this is active, since manually overriding an average would just be
+// silently discarded the next time a season rating changes anyway. A
+// show with no season ratings yet is untouched, so this never disrupts
+// existing manually-set ratings until you actually start using the
+// per-season ratings.
+let tvRatingLocked = false;
+function updateTvAutoRating(){
+  const isTV = document.getElementById('f_category').value === 'TV Shows';
+  const avg = isTV ? computeTvAverageRating(workingSeasons) : null;
+  const note = document.getElementById('tvAutoRatingNote');
+  if(avg !== null){
+    tvRatingLocked = true;
+    currentRating = avg;
+    renderRatingInput();
+    const ratedCount = workingSeasons.filter(s => s.rating > 0).length;
+    note.textContent = `Auto-averaged from ${ratedCount} rated season${ratedCount===1?'':'s'} — rate individual seasons above to change this.`;
+    note.classList.remove('hidden');
+  } else {
+    tvRatingLocked = false;
+    note.classList.add('hidden');
+  }
+}
+
 const STATUS_COLOR = {
   "Backlog": "var(--status-backlog)",
   "In Progress": "var(--status-progress)",
@@ -2358,6 +2415,32 @@ function groupByStatus(list){
   return STATUS_ORDER.map(s => ({ status: s, list: groups[s] })).filter(g => g.list.length > 0);
 }
 
+// Compact per-season breakdown shown on TV Show cards — season number,
+// rating (if that season's been rated), and watched date (if logged).
+// Only renders anything if there's at least one season with real data,
+// so an empty seasons list or a show that hasn't used per-season
+// tracking yet doesn't show an empty/pointless block.
+function buildSeasonMiniListHtml(item){
+  if(item.category !== 'TV Shows') return '';
+  const seasons = Array.isArray(item.seasons) ? item.seasons : [];
+  if(seasons.length === 0) return '';
+  const hasAnyData = seasons.some(s => s.rating > 0 || s.dateWatched);
+  if(!hasAnyData) return '';
+
+  const sorted = seasons.slice().sort((a,b) => (a.number||0) - (b.number||0));
+  return `
+    <div class="season-mini-list">
+      ${sorted.map(s => `
+        <div class="season-mini-row ${s.rating > 0 ? '' : 'unrated'}">
+          <span class="season-mini-num">S${s.number}</span>
+          <span class="season-mini-rating">${s.rating > 0 ? formatRating(s.rating) + ' ★' : '—'}</span>
+          ${s.dateWatched ? `<span class="season-mini-date">${escapeHtml(formatDateShort(s.dateWatched))}</span>` : ''}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
 function buildChipsHtml(item){
   const chips = [];
   if(item.genre) chips.push({ text: item.genre, isGenre: true });
@@ -2405,6 +2488,7 @@ function renderCardItem(item, idx){
           </div>
           ${progress ? `<div class="progress-wrap"><div class="progress-track"><div class="progress-fill" style="width:${progress.pct===null?100:progress.pct}%; ${progress.pct===null?'opacity:0.35':''}"></div></div><span class="progress-label">${escapeHtml(progress.label)}</span></div>` : ''}
           ${(item.dateStarted || item.dateFinished) ? `<div class="date-line">${item.dateStarted ? 'Started '+formatDateShort(item.dateStarted) : ''}${item.dateStarted && item.dateFinished ? ' · ' : ''}${item.dateFinished ? 'Finished '+formatDateShort(item.dateFinished) : ''}</div>` : ''}
+          ${buildSeasonMiniListHtml(item)}
           ${item.notes ? `<div class="notes">${escapeHtml(item.notes)}</div>` : ''}
           ${buildChipsHtml(item)}
           <div class="status-row">
@@ -3047,12 +3131,19 @@ function renderSeasonRows(){
   }
   container.innerHTML = workingSeasons.map((s, idx) => `
     <div class="season-row" data-idx="${idx}">
-      <span class="season-row-label">S</span>
-      <input type="number" class="season-num" min="1" value="${s.number ?? ''}" placeholder="#">
-      <input type="number" class="season-watched" min="0" value="${s.episodesWatched ?? ''}" placeholder="Ep watched">
-      <input type="number" class="season-total" min="0" value="${s.totalEpisodes ?? ''}" placeholder="Total eps">
-      <label><input type="checkbox" class="season-completed" ${s.completed ? 'checked' : ''}> Done</label>
-      <button type="button" class="season-remove-btn" title="Remove season">✕</button>
+      <div class="season-row-line">
+        <span class="season-row-label">S</span>
+        <input type="number" class="season-num" min="1" value="${s.number ?? ''}" placeholder="#">
+        <input type="number" class="season-watched" min="0" value="${s.episodesWatched ?? ''}" placeholder="Ep watched">
+        <input type="number" class="season-total" min="0" value="${s.totalEpisodes ?? ''}" placeholder="Total eps">
+        <label><input type="checkbox" class="season-completed" ${s.completed ? 'checked' : ''}> Done</label>
+        <button type="button" class="season-remove-btn" title="Remove season">✕</button>
+      </div>
+      <div class="season-row-line">
+        <input type="date" class="season-date" value="${s.dateWatched || ''}" title="Date watched">
+        <div class="star-row size-sm season-star-row" data-idx="${idx}">${starSlotsHtml(s.rating || 0)}</div>
+        <span class="season-rating-value">${formatRating(s.rating || 0) || 'Not rated'}</span>
+      </div>
     </div>
   `).join('');
 
@@ -3062,10 +3153,20 @@ function renderSeasonRows(){
     row.querySelector('.season-watched').addEventListener('input', (e)=>{ workingSeasons[idx].episodesWatched = e.target.value; });
     row.querySelector('.season-total').addEventListener('input', (e)=>{ workingSeasons[idx].totalEpisodes = e.target.value; });
     row.querySelector('.season-completed').addEventListener('change', (e)=>{ workingSeasons[idx].completed = e.target.checked; });
+    row.querySelector('.season-date').addEventListener('input', (e)=>{ workingSeasons[idx].dateWatched = e.target.value; });
     row.querySelector('.season-remove-btn').addEventListener('click', ()=>{
       workingSeasons.splice(idx, 1);
       renderSeasonRows();
+      updateTvAutoRating();
     });
+
+    const starRow = row.querySelector('.season-star-row');
+    starRow.addEventListener('click', (e)=>{
+      workingSeasons[idx].rating = valueFromEvent(e, starRow);
+      renderSeasonRows();
+      updateTvAutoRating();
+    });
+    attachStarHoverPreview(starRow, () => workingSeasons[idx].rating || 0);
   });
 }
 
@@ -3073,8 +3174,9 @@ document.getElementById('addSeasonRowBtn').addEventListener('click', ()=>{
   const nextNumber = workingSeasons.length > 0
     ? (parseInt(workingSeasons[workingSeasons.length-1].number) || workingSeasons.length) + 1
     : 1;
-  workingSeasons.push({ number: nextNumber, episodesWatched: '', totalEpisodes: '', completed: false });
+  workingSeasons.push({ number: nextNumber, episodesWatched: '', totalEpisodes: '', completed: false, rating: 0, dateWatched: '' });
   renderSeasonRows();
+  updateTvAutoRating();
 });
 
 function openModal(id){
@@ -3194,6 +3296,7 @@ function openModal(id){
   toggleBookFields();
   updateCoverPreview();
   renderRatingInput();
+  updateTvAutoRating();
   updateRatingReminder();
   checkDuplicateWarning();
   overlay.classList.remove('hidden');
@@ -3208,7 +3311,10 @@ function closeModal(){
 document.getElementById('addBtn').addEventListener('click', ()=> openModal(null));
 document.getElementById('emptyAddBtn').addEventListener('click', ()=> openModal(null));
 document.getElementById('cancelBtn').addEventListener('click', closeModal);
-document.getElementById('f_category').addEventListener('change', toggleBookFields);
+document.getElementById('f_category').addEventListener('change', ()=>{
+  toggleBookFields();
+  updateTvAutoRating();
+});
 document.getElementById('f_specialEdition').addEventListener('change', ()=>{
   document.getElementById('specialEditionDetailField').classList.toggle('hidden', !document.getElementById('f_specialEdition').checked);
 });
@@ -3286,7 +3392,9 @@ document.getElementById('saveBtn').addEventListener('click', async ()=>{
       number: parseInt(s.number) || 0,
       episodesWatched: parseInt(s.episodesWatched) || 0,
       totalEpisodes: s.totalEpisodes !== '' && s.totalEpisodes != null ? parseInt(s.totalEpisodes) : null,
-      completed: !!s.completed
+      completed: !!s.completed,
+      rating: s.rating || 0,
+      dateWatched: s.dateWatched || ''
     })).filter(s => s.number > 0) : [],
     progressPercent: (isTV || isComic || isMovie || isBoardGame) ? '' : document.getElementById('f_progress').value.trim(),
     status: document.getElementById('f_status').value,
@@ -3359,12 +3467,20 @@ document.getElementById('deleteBtn').addEventListener('click', async ()=>{
 });
 
 document.getElementById('f_rating_stars').addEventListener('click', (e)=>{
+  if(tvRatingLocked){
+    showToast('Rating is auto-averaged from season ratings for TV Shows.', '📺');
+    return;
+  }
   currentRating = valueFromEvent(e, document.getElementById('f_rating_stars'));
   renderRatingInput();
   updateRatingReminder();
 });
 attachStarHoverPreview(document.getElementById('f_rating_stars'), () => currentRating);
 document.getElementById('f_rating_clear').addEventListener('click', ()=>{
+  if(tvRatingLocked){
+    showToast('Rating is auto-averaged from season ratings for TV Shows.', '📺');
+    return;
+  }
   currentRating = 0;
   renderRatingInput();
   updateRatingReminder();
@@ -5602,7 +5718,7 @@ function buildLibraryCSV(){
     i.minPlayers || '', i.maxPlayers || '', i.playTimeMin || '', i.playTimeMax || '', i.minAge || '', i.manualUrl || '',
     Array.isArray(i.playSessions) ? i.playSessions.map(s => `${s.date}${s.winner ? ' (winner: '+s.winner+')' : ''}`).join('; ') : '',
     i.signedCopy ? 'Yes' : '', i.specialEdition ? 'Yes' : '', i.specialEditionDetail || '',
-    Array.isArray(i.seasons) ? i.seasons.map(s => `S${s.number}:${s.episodesWatched}${s.totalEpisodes ? '/'+s.totalEpisodes : ''}${s.completed ? ' (done)' : ''}`).join('; ') : '',
+    Array.isArray(i.seasons) ? i.seasons.map(s => `S${s.number}:${s.episodesWatched}${s.totalEpisodes ? '/'+s.totalEpisodes : ''}${s.completed ? ' (done)' : ''}${s.rating ? ' '+s.rating+'★' : ''}${s.dateWatched ? ' '+s.dateWatched : ''}`).join('; ') : '',
     i.dateStarted, i.dateFinished, i.notes
   ].map(csvEscape).join(','));
   return headers.join(',') + '\n' + rows.join('\n');
