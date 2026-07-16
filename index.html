@@ -275,6 +275,13 @@ select option{
 .btn-primary{ background: var(--gold); color: var(--ink-deep); }
 .btn-primary:hover{ opacity: 0.9; }
 .btn-ghost{ background: transparent; color: var(--text-light); border: 1px solid rgba(var(--chrome-rgb),0.25); }
+/* Modals are always a light parchment surface regardless of the overall
+   app theme (Settings > Display > Theme only changes the page chrome
+   around them), so a ghost button's text needs to stay dark here even
+   when --text-light itself is a light color for the dark theme — using
+   the theme variable would make text like "Cancel"/"Close" nearly
+   invisible against the modal's own background. */
+.modal .btn-ghost{ color: var(--text-dark); border-color: rgba(35,38,47,0.25); }
 .btn-ghost:hover{ background: rgba(var(--chrome-rgb),0.08); }
 
 .count{
@@ -1258,12 +1265,12 @@ select option{
     <option value="finished_desc">Date finished (newest)</option>
     <option value="finished_asc">Date finished (oldest)</option>
     <option value="started_desc">Date started (newest)</option>
-    <option value="playtime_asc">Play Time (shortest)</option>
-    <option value="playtime_desc">Play Time (longest)</option>
-    <option value="players_asc">Player Count (fewest)</option>
-    <option value="players_desc">Player Count (most)</option>
-    <option value="minage_asc">Min Age (youngest)</option>
-    <option value="minage_desc">Min Age (oldest)</option>
+    <option value="playtime_asc" id="sortOpt_playtimeAsc">Play Time (shortest)</option>
+    <option value="playtime_desc" id="sortOpt_playtimeDesc">Play Time (longest)</option>
+    <option value="players_asc" id="sortOpt_playersAsc">Player Count (fewest)</option>
+    <option value="players_desc" id="sortOpt_playersDesc">Player Count (most)</option>
+    <option value="minage_asc" id="sortOpt_minageAsc">Min Age (youngest)</option>
+    <option value="minage_desc" id="sortOpt_minageDesc">Min Age (oldest)</option>
   </select>
   <div class="spacer"></div>
   <div class="view-toggle">
@@ -1761,6 +1768,23 @@ select option{
         <input type="number" id="f_runtime" min="1" placeholder="e.g. 142">
       </div>
     </div>
+    <div id="ownedFormatSection" class="book-fields hidden">
+      <div class="field-row">
+        <div class="field">
+          <label>Owned Format</label>
+          <select id="f_ownedFormat">
+            <option value="">Select format…</option>
+            <option value="Physical">Physical</option>
+            <option value="Downloaded">Downloaded</option>
+            <option value="Streaming">Streaming</option>
+          </select>
+        </div>
+        <div class="field hidden" id="streamingServiceField">
+          <label>Streaming Service</label>
+          <input type="text" id="f_streamingService" placeholder="e.g. Netflix, Disney+">
+        </div>
+      </div>
+    </div>
     <div id="gameFields" class="book-fields hidden">
       <div class="field">
         <label>Hours Played</label>
@@ -1859,16 +1883,6 @@ select option{
         <input type="text" id="f_pubdate" placeholder="e.g. 2015-06-02 or June 2015">
       </div>
       <div class="field">
-        <label>Format</label>
-        <select id="f_format">
-          <option value="">Select format…</option>
-          <option value="Digital">Digital</option>
-          <option value="Paperback">Paperback</option>
-          <option value="Hardback">Hardback</option>
-          <option value="Audiobook">Audiobook</option>
-        </select>
-      </div>
-      <div class="field">
         <label>Author Gender</label>
         <select id="f_authorGender">
           <option value="">— Not specified —</option>
@@ -1887,6 +1901,16 @@ select option{
         <label>Special Edition Details</label>
         <input type="text" id="f_specialEditionDetail" placeholder="e.g. Inkstone Books, The Broken Binding">
       </div>
+    </div>
+    <div id="formatField" class="field hidden">
+      <label>Format</label>
+      <select id="f_format">
+        <option value="">Select format…</option>
+        <option value="Digital">Digital</option>
+        <option value="Paperback">Paperback</option>
+        <option value="Hardback">Hardback</option>
+        <option value="Audiobook">Audiobook</option>
+      </select>
     </div>
     <div id="tvFields" class="book-fields hidden">
       <div class="field">
@@ -2077,6 +2101,22 @@ function buildTabs(){
   tabsEl.querySelectorAll('.tab').forEach(t=>{
     t.addEventListener('click', ()=>{ activeTab = t.dataset.cat; buildTabs(); render(); });
   });
+  updateBoardGameSortOptions();
+}
+
+// The Play Time / Player Count / Min Age sort options only make sense for
+// Board Games, so they're hidden everywhere else (including "All") rather
+// than sitting there doing nothing useful for every other category.
+function updateBoardGameSortOptions(){
+  const isBoardGameTab = activeTab === 'Board Games';
+  ['sortOpt_playtimeAsc','sortOpt_playtimeDesc','sortOpt_playersAsc','sortOpt_playersDesc','sortOpt_minageAsc','sortOpt_minageDesc'].forEach(id => {
+    document.getElementById(id).classList.toggle('hidden', !isBoardGameTab);
+  });
+  const sortSelect = document.getElementById('sortBy');
+  const boardGameOnlyValues = ['playtime_asc','playtime_desc','players_asc','players_desc','minage_asc','minage_desc'];
+  if(!isBoardGameTab && boardGameOnlyValues.includes(sortSelect.value)){
+    sortSelect.value = 'added_desc';
+  }
 }
 
 async function loadItems(){
@@ -2346,6 +2386,7 @@ function renderCardItem(item, idx){
               ${(item.pageCount || item.format) ? `<div class="book-meta">${[item.pageCount ? item.pageCount+' pp' : '', item.format || ''].filter(Boolean).map(escapeHtml).join(' · ')}</div>` : ''}
               ${item.totalIssues ? `<div class="book-meta">${escapeHtml(item.totalIssues)} issue${item.totalIssues == 1 ? '' : 's'}</div>` : ''}
               ${item.runtime ? `<div class="book-meta">${escapeHtml(formatRuntime(item.runtime))}</div>` : ''}
+              ${item.ownedFormat ? `<div class="book-meta">${[item.ownedFormat, (item.ownedFormat === 'Streaming' && item.streamingService) ? item.streamingService : ''].filter(Boolean).map(escapeHtml).join(' · ')}</div>` : ''}
               ${item.hoursPlayed ? `<div class="book-meta">${escapeHtml(item.hoursPlayed)}h played</div>` : ''}
               ${(item.platform || item.gameFormat) ? `<div class="book-meta">${[item.platform || '', item.gameFormat || '', (item.platform === 'PC' && item.platformLauncher) ? item.platformLauncher : ''].filter(Boolean).map(escapeHtml).join(' · ')}</div>` : ''}
               ${(item.minPlayers || item.maxPlayers || item.playTimeMin || item.playTimeMax || item.minAge) ? `<div class="book-meta">${[
@@ -2457,8 +2498,19 @@ function showToast(message, icon){
 // Board Games it's the opposite — an owned game is endlessly replayable,
 // so the useful question is "what should we play tonight," not "what
 // haven't I tried yet," which is what the Wishlist would represent.
+//
+// For categories that track a specific owned format (Books, Movies,
+// Video Games), that field doubles as a signal of actually having
+// access to the thing — a backlog item with no format set might just be
+// an aspirational want, not something ready to pick up right now, so
+// those are excluded until a format is filled in.
 function isPickableForRandom(item){
-  return item.category === 'Board Games' ? item.status === 'Completed' : item.status === 'Backlog';
+  if(item.category === 'Board Games') return item.status === 'Completed';
+  if(item.status !== 'Backlog') return false;
+  if(item.category === 'Books' || item.category === 'Comics') return !!item.format;
+  if(item.category === 'Movies' || item.category === 'TV Shows') return !!item.ownedFormat;
+  if(item.category === 'Video Games') return !!item.gameFormat;
+  return true;
 }
 
 document.getElementById('surpriseMeBtn').addEventListener('click', ()=>{
@@ -2554,6 +2606,9 @@ document.getElementById('recommendBtn').addEventListener('click', ()=>{
 });
 document.getElementById('recommendCloseBtn').addEventListener('click', ()=>{
   document.getElementById('recommendOverlay').classList.add('hidden');
+});
+document.getElementById('recommendOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'recommendOverlay') document.getElementById('recommendOverlay').classList.add('hidden');
 });
 document.getElementById('recommendGetBtn').addEventListener('click', ()=>{
   renderRecommendResult(computeRecommendation(document.getElementById('recommendCategory').value));
@@ -2895,9 +2950,11 @@ function toggleBookFields(){
   const isGame = category === 'Video Games';
   const isBoardGame = category === 'Board Games';
   document.getElementById('bookFields').classList.toggle('hidden', !isBook);
+  document.getElementById('formatField').classList.toggle('hidden', !(isBook || isComic));
   document.getElementById('tvFields').classList.toggle('hidden', !isTV);
   document.getElementById('comicFields').classList.toggle('hidden', !isComic);
   document.getElementById('movieFields').classList.toggle('hidden', !isMovie);
+  document.getElementById('ownedFormatSection').classList.toggle('hidden', !(isMovie || isTV));
   document.getElementById('gameFields').classList.toggle('hidden', !isGame);
   document.getElementById('boardGameFields').classList.toggle('hidden', !isBoardGame);
   // Progress % is available for every category except TV Shows, Comics,
@@ -3053,6 +3110,9 @@ function openModal(id){
     document.getElementById('f_currentIssue').value = item.currentIssue || '';
     document.getElementById('f_currentIssuePage').value = item.currentIssuePage || '';
     document.getElementById('f_runtime').value = item.runtime || '';
+    document.getElementById('f_ownedFormat').value = item.ownedFormat || '';
+    document.getElementById('f_streamingService').value = item.streamingService || '';
+    document.getElementById('streamingServiceField').classList.toggle('hidden', item.ownedFormat !== 'Streaming');
     document.getElementById('f_hoursPlayed').value = item.hoursPlayed || '';
     document.getElementById('f_platform').value = item.platform || '';
     document.getElementById('f_gameFormat').value = item.gameFormat || '';
@@ -3103,6 +3163,9 @@ function openModal(id){
     document.getElementById('f_currentIssue').value = '';
     document.getElementById('f_currentIssuePage').value = '';
     document.getElementById('f_runtime').value = '';
+    document.getElementById('f_ownedFormat').value = '';
+    document.getElementById('f_streamingService').value = '';
+    document.getElementById('streamingServiceField').classList.add('hidden');
     document.getElementById('f_hoursPlayed').value = '';
     document.getElementById('f_platform').value = '';
     document.getElementById('f_gameFormat').value = '';
@@ -3152,6 +3215,9 @@ document.getElementById('f_specialEdition').addEventListener('change', ()=>{
 document.getElementById('f_platform').addEventListener('change', ()=>{
   document.getElementById('platformLauncherField').classList.toggle('hidden', document.getElementById('f_platform').value !== 'PC');
 });
+document.getElementById('f_ownedFormat').addEventListener('change', ()=>{
+  document.getElementById('streamingServiceField').classList.toggle('hidden', document.getElementById('f_ownedFormat').value !== 'Streaming');
+});
 document.getElementById('f_cover').addEventListener('input', updateCoverPreview);
 let isbnCoverDebounce = null;
 document.getElementById('f_isbn').addEventListener('input', ()=>{
@@ -3200,9 +3266,11 @@ document.getElementById('saveBtn').addEventListener('click', async ()=>{
     pageCount: isBook ? document.getElementById('f_pages').value.trim() : '',
     currentPage: isBook ? document.getElementById('f_currentpage').value.trim() : '',
     publishDate: isBook ? document.getElementById('f_pubdate').value.trim() : '',
-    format: isBook ? document.getElementById('f_format').value : '',
+    format: (isBook || isComic) ? document.getElementById('f_format').value : '',
     authorGender: isBook ? document.getElementById('f_authorGender').value : '',
     runtime: isMovie ? document.getElementById('f_runtime').value.trim() : '',
+    ownedFormat: (isMovie || isTV) ? document.getElementById('f_ownedFormat').value : '',
+    streamingService: ((isMovie || isTV) && document.getElementById('f_ownedFormat').value === 'Streaming') ? document.getElementById('f_streamingService').value.trim() : '',
     hoursPlayed: isGame ? document.getElementById('f_hoursPlayed').value.trim() : '',
     platform: isGame ? document.getElementById('f_platform').value : '',
     gameFormat: isGame ? document.getElementById('f_gameFormat').value : '',
@@ -5525,11 +5593,12 @@ function csvEscape(val){
 }
 
 function buildLibraryCSV(){
-  const headers = ['Title','Category','Creator','Status','Rating','Year','Format','AuthorGender','PageCount','CurrentPage','ISBN','PublishDate','Platform','GameFormat','PlatformLauncher','HoursPlayed','MinPlayers','MaxPlayers','PlayTimeMin','PlayTimeMax','MinAge','ManualUrl','PlaySessions','SignedCopy','SpecialEdition','SpecialEditionDetail','Seasons','DateStarted','DateFinished','Notes'];
+  const headers = ['Title','Category','Creator','Status','Rating','Year','Format','AuthorGender','PageCount','CurrentPage','ISBN','PublishDate','Platform','GameFormat','PlatformLauncher','HoursPlayed','OwnedFormat','StreamingService','MinPlayers','MaxPlayers','PlayTimeMin','PlayTimeMax','MinAge','ManualUrl','PlaySessions','SignedCopy','SpecialEdition','SpecialEditionDetail','Seasons','DateStarted','DateFinished','Notes'];
   const rows = items.map(i => [
     i.title, i.category, i.creator, i.status, i.rating, i.year, i.format, i.authorGender || '',
     i.pageCount, i.currentPage, i.isbn, i.publishDate,
     i.platform || '', i.gameFormat || '', i.platformLauncher || '', i.hoursPlayed || '',
+    i.ownedFormat || '', i.streamingService || '',
     i.minPlayers || '', i.maxPlayers || '', i.playTimeMin || '', i.playTimeMax || '', i.minAge || '', i.manualUrl || '',
     Array.isArray(i.playSessions) ? i.playSessions.map(s => `${s.date}${s.winner ? ' (winner: '+s.winner+')' : ''}`).join('; ') : '',
     i.signedCopy ? 'Yes' : '', i.specialEdition ? 'Yes' : '', i.specialEditionDetail || '',
@@ -5612,7 +5681,7 @@ function parseCSV(text){
 function blankItem(){
   return {
     id: '', title: '', category: '', creator: '', year: '', coverUrl: '', isbn: '',
-    pageCount: '', currentPage: '', publishDate: '', format: '', authorGender: '', runtime: '',
+    pageCount: '', currentPage: '', publishDate: '', format: '', authorGender: '', runtime: '', ownedFormat: '', streamingService: '',
     hoursPlayed: '', platform: '', gameFormat: '', platformLauncher: '', seasons: [], totalIssues: '', currentIssue: '', currentIssuePage: '',
     minPlayers: '', maxPlayers: '', playTimeMin: '', playTimeMax: '', manualUrl: '', minAge: '', playSessions: [],
     progressPercent: '', status: 'Backlog', dateStarted: '', dateFinished: '', rating: 0,
@@ -5723,6 +5792,7 @@ document.getElementById('importCsvFile').addEventListener('change', async (e)=>{
         rating: parseFloat(r.Rating) || 0, year: r.Year || '', format: r.Format || '',
         authorGender: r.AuthorGender || '',
         platform: r.Platform || '', gameFormat: r.GameFormat || '', platformLauncher: r.PlatformLauncher || '', hoursPlayed: r.HoursPlayed || '',
+        ownedFormat: r.OwnedFormat || '', streamingService: r.StreamingService || '',
         minPlayers: r.MinPlayers || '', maxPlayers: r.MaxPlayers || '', playTimeMin: r.PlayTimeMin || '', playTimeMax: r.PlayTimeMax || '', minAge: r.MinAge || '', manualUrl: r.ManualUrl || '',
         pageCount: r.PageCount || '', currentPage: r.CurrentPage || '', isbn: r.ISBN || '',
         publishDate: r.PublishDate || '', dateStarted: r.DateStarted || '', dateFinished: r.DateFinished || '',
