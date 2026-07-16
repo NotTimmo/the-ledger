@@ -440,7 +440,7 @@ select option{
   font-weight: 600;
 }
 .card-cover-placeholder.hidden{ display:none; }
-.card-info{ flex:1; min-width:0; display:flex; flex-direction:column; gap:8px; }
+.card-info{ flex:1; min-width:0; display:flex; flex-direction:column; gap:6px; }
 
 .card-top{
   display:flex;
@@ -2160,7 +2160,7 @@ function renderCardItem(item, idx){
               <h3>${escapeHtml(item.title)}</h3>
               ${item.creator || item.year ? `<div class="creator">${escapeHtml(item.creator||'')}${item.creator && item.year ? ' · ' : ''}${escapeHtml(item.year||'')}</div>` : ''}
               ${item.seriesName ? `<div class="book-meta">${escapeHtml(item.seriesName)}${item.seriesNumber ? ` #${escapeHtml(item.seriesNumber)}` : ''}${item.seriesTotal ? ` of ${escapeHtml(item.seriesTotal)}` : ''}</div>` : ''}
-              ${(item.pageCount || item.format || item.publishDate || item.authorGender) ? `<div class="book-meta">${[item.pageCount ? item.pageCount+' pp' : '', item.format || '', item.publishDate || '', item.authorGender || ''].filter(Boolean).map(escapeHtml).join(' · ')}</div>` : ''}
+              ${(item.pageCount || item.format) ? `<div class="book-meta">${[item.pageCount ? item.pageCount+' pp' : '', item.format || ''].filter(Boolean).map(escapeHtml).join(' · ')}</div>` : ''}
               ${item.totalIssues ? `<div class="book-meta">${escapeHtml(item.totalIssues)} issue${item.totalIssues == 1 ? '' : 's'}</div>` : ''}
               ${item.runtime ? `<div class="book-meta">${escapeHtml(formatRuntime(item.runtime))}</div>` : ''}
               ${item.hoursPlayed ? `<div class="book-meta">${escapeHtml(item.hoursPlayed)}h played</div>` : ''}
