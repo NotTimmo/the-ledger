@@ -73,6 +73,7 @@
   --c-comics: #B4553B;
   --c-movies: #4C6FA6;
   --c-tv: #7A5980;
+  --c-boardgames: #A6743F;
 
   --status-backlog: #8A93A6;
   --status-progress: #4F86C6;
@@ -1257,6 +1258,10 @@ select option{
     <option value="finished_desc">Date finished (newest)</option>
     <option value="finished_asc">Date finished (oldest)</option>
     <option value="started_desc">Date started (newest)</option>
+    <option value="playtime_asc">Play Time (shortest)</option>
+    <option value="playtime_desc">Play Time (longest)</option>
+    <option value="players_asc">Player Count (fewest)</option>
+    <option value="players_desc">Player Count (most)</option>
   </select>
   <div class="spacer"></div>
   <div class="view-toggle">
@@ -1309,6 +1314,7 @@ select option{
       <option value="Movies">Movies</option>
       <option value="TV Shows">TV Shows</option>
       <option value="Video Games">Video Games</option>
+      <option value="Board Games">Board Games</option>
     </select>
     <select id="statsMonth">
       <option value="">All Time</option>
@@ -1361,6 +1367,7 @@ select option{
       <option value="Movies">Movies</option>
       <option value="TV Shows">TV Shows</option>
       <option value="Video Games">Video Games</option>
+      <option value="Board Games">Board Games</option>
       <option value="Overall">Overall</option>
     </select>
     <div class="spacer"></div>
@@ -1381,6 +1388,7 @@ select option{
         <option value="Movies">Movies</option>
         <option value="TV Shows">TV Shows</option>
         <option value="Video Games">Video Games</option>
+        <option value="Board Games">Board Games</option>
         <option value="wildcard">🎲 Wildcard (totally random)</option>
       </select>
     </div>
@@ -1467,6 +1475,7 @@ select option{
             <option value="Movies">Movies</option>
             <option value="TV Shows">TV Shows</option>
             <option value="Video Games">Video Games</option>
+            <option value="Board Games">Board Games</option>
           </select>
         </div>
         <div class="field">
@@ -1548,6 +1557,7 @@ select option{
         <option value="Movies">Movies</option>
         <option value="TV Shows">TV Shows</option>
         <option value="Video Games">Video Games</option>
+        <option value="Board Games">Board Games</option>
       </select>
     </div>
     <div class="field">
@@ -1663,6 +1673,7 @@ select option{
         <option value="Movies">Movies</option>
         <option value="TV Shows">TV Shows</option>
         <option value="Video Games">Video Games</option>
+        <option value="Board Games">Board Games</option>
       </select>
     </div>
     <div class="field" id="goalsPagesField">
@@ -1701,6 +1712,7 @@ select option{
         <option value="Movies">Movies</option>
         <option value="TV Shows">TV Shows</option>
         <option value="Video Games">Video Games</option>
+        <option value="Board Games">Board Games</option>
       </select>
     </div>
     <div class="field" id="creatorField">
@@ -1786,6 +1798,32 @@ select option{
         </select>
       </div>
     </div>
+    <div id="boardGameFields" class="book-fields hidden">
+      <div class="field-row">
+        <div class="field">
+          <label>Min Players</label>
+          <input type="number" id="f_minPlayers" min="1" placeholder="e.g. 2">
+        </div>
+        <div class="field">
+          <label>Max Players</label>
+          <input type="number" id="f_maxPlayers" min="1" placeholder="e.g. 4">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Play Time — Min (minutes)</label>
+          <input type="number" id="f_playTimeMin" min="1" placeholder="e.g. 30">
+        </div>
+        <div class="field">
+          <label>Play Time — Max (minutes)</label>
+          <input type="number" id="f_playTimeMax" min="1" placeholder="e.g. 60">
+        </div>
+      </div>
+      <div class="field">
+        <label>Game Manual URL</label>
+        <input type="text" id="f_manualUrl" placeholder="Link to the rulebook/manual PDF or webpage">
+      </div>
+    </div>
     <div class="field">
       <label>Cover Image URL</label>
       <input type="text" id="f_cover" placeholder="Paste an image URL (optional)">
@@ -1856,13 +1894,13 @@ select option{
     <div class="field">
       <label>Status</label>
       <select id="f_status">
-        <option value="Backlog">Backlog</option>
-        <option value="In Progress">In Progress</option>
-        <option value="Completed">Completed</option>
-        <option value="Dropped">Dropped</option>
+        <option value="Backlog" id="statusOpt_Backlog">Backlog</option>
+        <option value="In Progress" id="statusOpt_InProgress">In Progress</option>
+        <option value="Completed" id="statusOpt_Completed">Completed</option>
+        <option value="Dropped" id="statusOpt_Dropped">Dropped</option>
       </select>
     </div>
-    <div class="field-row">
+    <div class="field-row" id="datesFieldRow">
       <div class="field">
         <label id="f_started_label">Date Started</label>
         <input type="date" id="f_started">
@@ -1932,6 +1970,34 @@ select option{
         </div>
       </div>
     </div>
+    <div class="field hidden" id="playLogSection">
+      <label>Play Log</label>
+      <button type="button" class="lookup-btn" id="logPlayBtn">🎲 Log a Play</button>
+      <p class="lookup-status" id="playLogStatus">Log every session — as many as you like, whenever you play.</p>
+      <div class="field hidden" id="playLogConfirmField" style="margin-top:10px;">
+        <div class="field-row">
+          <div class="field">
+            <label>Date Played</label>
+            <input type="date" id="play_date">
+          </div>
+          <div class="field">
+            <label>Winner (optional)</label>
+            <input type="text" id="play_winner" placeholder="e.g. Alex">
+          </div>
+        </div>
+        <label style="margin-top:8px; display:block;">Players</label>
+        <input type="text" id="play_players" placeholder="e.g. Alex, Sam, Jordan">
+        <label style="margin-top:8px; display:block;">Scores (optional)</label>
+        <input type="text" id="play_scores" placeholder="e.g. Alex: 45, Sam: 38, Jordan: 30">
+        <label style="margin-top:8px; display:block;">Notes (optional)</label>
+        <textarea id="play_notes" placeholder="How'd it go?"></textarea>
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button type="button" class="btn btn-ghost" id="playLogCancelBtn">Cancel</button>
+          <button type="button" class="btn btn-primary" id="playLogConfirmBtn">Save Play</button>
+        </div>
+      </div>
+      <div id="playHistoryList" style="margin-top:12px;"></div>
+    </div>
     <label class="checkbox-row">
       <input type="checkbox" id="f_recommend"> Would recommend
     </label>
@@ -1953,20 +2019,22 @@ select option{
 <!-- /#appRoot -->
 
 <script>
-const CATEGORIES = ["Books","Comics","Movies","TV Shows","Video Games"];
+const CATEGORIES = ["Books","Comics","Movies","TV Shows","Video Games","Board Games"];
 const CAT_COLOR = {
   "Video Games": "var(--c-games)",
   "Books": "var(--c-books)",
   "Comics": "var(--c-comics)",
   "Movies": "var(--c-movies)",
-  "TV Shows": "var(--c-tv)"
+  "TV Shows": "var(--c-tv)",
+  "Board Games": "var(--c-boardgames)"
 };
 const CATEGORY_ICON = {
   "Video Games": "🎮",
   "Books": "📖",
   "Comics": "📗",
   "Movies": "🎬",
-  "TV Shows": "📺"
+  "TV Shows": "📺",
+  "Board Games": "🎲"
 };
 
 
@@ -2160,8 +2228,38 @@ function getFiltered(){
   else if(sort === 'finished_desc') list.sort((a,b)=> sortByDate(a.dateFinished, b.dateFinished, true));
   else if(sort === 'finished_asc') list.sort((a,b)=> sortByDate(a.dateFinished, b.dateFinished, false));
   else if(sort === 'started_desc') list.sort((a,b)=> sortByDate(a.dateStarted, b.dateStarted, true));
+  else if(sort === 'playtime_asc') list.sort((a,b)=> sortByNumber(getPlayTimeValue(a), getPlayTimeValue(b), false));
+  else if(sort === 'playtime_desc') list.sort((a,b)=> sortByNumber(getPlayTimeValue(a), getPlayTimeValue(b), true));
+  else if(sort === 'players_asc') list.sort((a,b)=> sortByNumber(getPlayerCountValue(a), getPlayerCountValue(b), false));
+  else if(sort === 'players_desc') list.sort((a,b)=> sortByNumber(getPlayerCountValue(a), getPlayerCountValue(b), true));
   else list.sort((a,b)=> b.createdAt - a.createdAt);
   return list;
+}
+
+// Representative single number for sorting, since play time / player
+// count are stored as a min/max range — averages the two when both are
+// set, falls back to whichever one exists, or null if neither is set.
+function getPlayTimeValue(item){
+  const min = parseFloat(item.playTimeMin), max = parseFloat(item.playTimeMax);
+  if(!isNaN(min) && !isNaN(max)) return (min + max) / 2;
+  if(!isNaN(min)) return min;
+  if(!isNaN(max)) return max;
+  return null;
+}
+function getPlayerCountValue(item){
+  const min = parseFloat(item.minPlayers), max = parseFloat(item.maxPlayers);
+  if(!isNaN(max)) return max;
+  if(!isNaN(min)) return min;
+  return null;
+}
+
+// Like sortByDate, but for plain numbers (or null). Items missing the
+// value always sink to the bottom regardless of sort direction.
+function sortByNumber(a, b, descending){
+  if(a === null && b === null) return 0;
+  if(a === null) return 1;
+  if(b === null) return -1;
+  return descending ? b - a : a - b;
 }
 
 // Compares two YYYY-MM-DD date strings (or empty strings). Items with no
@@ -2222,6 +2320,11 @@ function renderCardItem(item, idx){
               ${item.runtime ? `<div class="book-meta">${escapeHtml(formatRuntime(item.runtime))}</div>` : ''}
               ${item.hoursPlayed ? `<div class="book-meta">${escapeHtml(item.hoursPlayed)}h played</div>` : ''}
               ${(item.platform || item.gameFormat) ? `<div class="book-meta">${[item.platform || '', item.gameFormat || '', (item.platform === 'PC' && item.platformLauncher) ? item.platformLauncher : ''].filter(Boolean).map(escapeHtml).join(' · ')}</div>` : ''}
+              ${(item.minPlayers || item.maxPlayers || item.playTimeMin || item.playTimeMax) ? `<div class="book-meta">${[
+                (item.minPlayers || item.maxPlayers) ? `${item.minPlayers||'?'}${(item.maxPlayers && item.maxPlayers !== item.minPlayers) ? '–'+item.maxPlayers : ''} players` : '',
+                (item.playTimeMin || item.playTimeMax) ? `${item.playTimeMin||'?'}${(item.playTimeMax && item.playTimeMax !== item.playTimeMin) ? '–'+item.playTimeMax : ''} min` : ''
+              ].filter(Boolean).map(escapeHtml).join(' · ')}</div>` : ''}
+              ${item.manualUrl ? `<div class="book-meta"><a href="${escapeHtml(item.manualUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:inherit; text-decoration:underline;">📄 Manual</a></div>` : ''}
               ${(item.signedCopy || item.specialEdition) ? `<div class="book-meta">${[item.signedCopy ? '✒ Signed' : '', item.specialEdition ? `★ Special Edition${item.specialEditionDetail ? ' — ' + escapeHtml(item.specialEditionDetail) : ''}` : ''].filter(Boolean).join(' · ')}</div>` : ''}
             </div>
             <div class="card-num">${catNum(idx)}</div>
@@ -2742,26 +2845,34 @@ function toggleBookFields(){
   const isComic = category === 'Comics';
   const isMovie = category === 'Movies';
   const isGame = category === 'Video Games';
+  const isBoardGame = category === 'Board Games';
   document.getElementById('bookFields').classList.toggle('hidden', !isBook);
   document.getElementById('tvFields').classList.toggle('hidden', !isTV);
   document.getElementById('comicFields').classList.toggle('hidden', !isComic);
   document.getElementById('movieFields').classList.toggle('hidden', !isMovie);
   document.getElementById('gameFields').classList.toggle('hidden', !isGame);
-  // Progress % is available for every category except TV Shows, Comics, and
-  // Movies — books can use % as an alternative to page-based tracking when
-  // page count isn't known.
-  document.getElementById('progressField').classList.toggle('hidden', isTV || isComic || isMovie);
+  document.getElementById('boardGameFields').classList.toggle('hidden', !isBoardGame);
+  // Progress % is available for every category except TV Shows, Comics,
+  // Movies, and Board Games — books can use % as an alternative to
+  // page-based tracking when page count isn't known.
+  document.getElementById('progressField').classList.toggle('hidden', isTV || isComic || isMovie || isBoardGame);
   document.getElementById('progressField').querySelector('label').textContent = isBook ? 'Progress % (if not tracking by page)' : 'Progress %';
+
+  // Board Games are a catalogue, not something with a single start/finish
+  // date — individual sessions are tracked separately via the Play Log
+  // instead, so the whole Date Started/Finished row is hidden for them.
+  document.getElementById('datesFieldRow').classList.toggle('hidden', isBoardGame);
 
   // TV Shows don't use a creator/network field or series-of-books tracking —
   // seasons are tracked separately via the Seasons Log below. Comics track
-  // issue count instead of a book-series position, Video Games don't have a
-  // book-series concept either, and Movies aren't part of a numbered series
-  // in the way this field is meant for, so they all skip this too.
+  // issue count instead of a book-series position, Video Games and Board
+  // Games don't have a book-series concept either, and Movies aren't part
+  // of a numbered series in the way this field is meant for, so they all
+  // skip this too.
   document.getElementById('creatorField').classList.toggle('hidden', isTV);
-  document.getElementById('seriesFieldRow').classList.toggle('hidden', isTV || isComic || isGame || isMovie);
+  document.getElementById('seriesFieldRow').classList.toggle('hidden', isTV || isComic || isGame || isMovie || isBoardGame);
 
-  const labelMap = { "Video Games": "Developer / Publisher", "Books": "Author", "Comics": "Writer / Artist", "Movies": "Director" };
+  const labelMap = { "Video Games": "Developer / Publisher", "Books": "Author", "Comics": "Writer / Artist", "Movies": "Director", "Board Games": "Designer" };
   document.getElementById('f_creator_label').textContent = labelMap[category] || 'Creator / Author / Studio';
 
   // TV Shows don't track acquisition cost/source — that's a collection-
@@ -2778,14 +2889,32 @@ function toggleBookFields(){
   const isScreen = isTV || category === 'Movies';
   document.getElementById('f_quote_label').textContent = isScreen ? 'Notes' : 'Favorite Quote';
 
-  // The "Log a Re-Read/Rewatch/Replay" action only makes sense for an
-  // existing item that's already Completed — logging a repeat of something
-  // you haven't finished yet doesn't mean anything.
+  // Board Games use "Wishlist / Owned / Sold" instead of the usual
+  // Backlog/In Progress/Completed/Dropped wording — same underlying
+  // values (so everything else in the app that groups by status still
+  // works unchanged), just relabeled to fit a collection rather than
+  // something with a linear reading/watching progress.
+  document.getElementById('statusOpt_Backlog').textContent = isBoardGame ? 'Wishlist' : 'Backlog';
+  document.getElementById('statusOpt_InProgress').textContent = isBoardGame ? 'On Order' : 'In Progress';
+  document.getElementById('statusOpt_Completed').textContent = isBoardGame ? 'Owned' : 'Completed';
+  document.getElementById('statusOpt_Dropped').textContent = isBoardGame ? 'Sold / Given Away' : 'Dropped';
+
+  // The "Log a Re-Read/Rewatch/Replay" flow only makes sense for an
+  // existing item that's already Completed — logging a repeat of
+  // something you haven't finished yet doesn't mean anything. Board
+  // Games use their own separate Play Log below instead of this section.
   const rereadLabel = isScreen ? 'Rewatch' : (isBook ? 'Re-Read' : (isComic ? 'Reread' : (isGame ? 'Replay' : 'Revisit')));
   document.getElementById('logRereadBtn_label').textContent = `Log a ${rereadLabel}`;
   const existingItem = editingId ? items.find(i => i.id === editingId) : null;
-  const canLogReread = !!(existingItem && existingItem.status === 'Completed');
+  const canLogReread = !!(existingItem && existingItem.status === 'Completed' && !isBoardGame);
   document.getElementById('readAgainSection').classList.toggle('hidden', !canLogReread);
+
+  // Play Log: available for any existing Board Game regardless of status
+  // (Wishlist/Owned/etc.) — you might borrow-and-play something before
+  // owning it, so this isn't gated the way "Log a Reread" is.
+  const canLogPlay = !!(existingItem && isBoardGame);
+  document.getElementById('playLogSection').classList.toggle('hidden', !canLogPlay);
+  if(canLogPlay) renderPlayHistory(existingItem);
 
   // Special Edition detail field only makes sense once that checkbox is
   // both visible (Books only) and checked.
@@ -2871,6 +3000,11 @@ function openModal(id){
     document.getElementById('f_gameFormat').value = item.gameFormat || '';
     document.getElementById('f_platformLauncher').value = item.platformLauncher || '';
     document.getElementById('platformLauncherField').classList.toggle('hidden', item.platform !== 'PC');
+    document.getElementById('f_minPlayers').value = item.minPlayers || '';
+    document.getElementById('f_maxPlayers').value = item.maxPlayers || '';
+    document.getElementById('f_playTimeMin').value = item.playTimeMin || '';
+    document.getElementById('f_playTimeMax').value = item.playTimeMax || '';
+    document.getElementById('f_manualUrl').value = item.manualUrl || '';
     document.getElementById('f_priority').value = item.priority || '';
     document.getElementById('f_tags').value = item.tags || '';
     document.getElementById('f_source').value = item.source || '';
@@ -2915,6 +3049,11 @@ function openModal(id){
     document.getElementById('f_gameFormat').value = '';
     document.getElementById('f_platformLauncher').value = '';
     document.getElementById('platformLauncherField').classList.add('hidden');
+    document.getElementById('f_minPlayers').value = '';
+    document.getElementById('f_maxPlayers').value = '';
+    document.getElementById('f_playTimeMin').value = '';
+    document.getElementById('f_playTimeMax').value = '';
+    document.getElementById('f_manualUrl').value = '';
     document.getElementById('f_priority').value = '';
     document.getElementById('f_tags').value = '';
     document.getElementById('f_source').value = '';
@@ -2987,6 +3126,7 @@ document.getElementById('saveBtn').addEventListener('click', async ()=>{
   const isComic = category === 'Comics';
   const isMovie = category === 'Movies';
   const isGame = category === 'Video Games';
+  const isBoardGame = category === 'Board Games';
   const previousItem = editingId ? items.find(i=>i.id===editingId) : null;
   const previousStatus = previousItem ? previousItem.status : null;
   const data = {
@@ -3007,21 +3147,27 @@ document.getElementById('saveBtn').addEventListener('click', async ()=>{
     platform: isGame ? document.getElementById('f_platform').value : '',
     gameFormat: isGame ? document.getElementById('f_gameFormat').value : '',
     platformLauncher: (isGame && document.getElementById('f_platform').value === 'PC') ? document.getElementById('f_platformLauncher').value : '',
+    minPlayers: isBoardGame ? document.getElementById('f_minPlayers').value.trim() : '',
+    maxPlayers: isBoardGame ? document.getElementById('f_maxPlayers').value.trim() : '',
+    playTimeMin: isBoardGame ? document.getElementById('f_playTimeMin').value.trim() : '',
+    playTimeMax: isBoardGame ? document.getElementById('f_playTimeMax').value.trim() : '',
+    manualUrl: isBoardGame ? document.getElementById('f_manualUrl').value.trim() : '',
+    playSessions: previousItem ? (previousItem.playSessions || []) : [],
     seasons: isTV ? workingSeasons.map(s => ({
       number: parseInt(s.number) || 0,
       episodesWatched: parseInt(s.episodesWatched) || 0,
       totalEpisodes: s.totalEpisodes !== '' && s.totalEpisodes != null ? parseInt(s.totalEpisodes) : null,
       completed: !!s.completed
     })).filter(s => s.number > 0) : [],
-    progressPercent: (isTV || isComic || isMovie) ? '' : document.getElementById('f_progress').value.trim(),
+    progressPercent: (isTV || isComic || isMovie || isBoardGame) ? '' : document.getElementById('f_progress').value.trim(),
     status: document.getElementById('f_status').value,
-    dateStarted: document.getElementById('f_started').value,
-    dateFinished: document.getElementById('f_finished').value,
+    dateStarted: isBoardGame ? '' : document.getElementById('f_started').value,
+    dateFinished: isBoardGame ? '' : document.getElementById('f_finished').value,
     rating: currentRating,
     genre: document.getElementById('f_genre').value.trim(),
-    seriesName: (isTV || isComic || isGame || isMovie) ? '' : document.getElementById('f_seriesName').value.trim(),
-    seriesNumber: (isTV || isComic || isGame || isMovie) ? '' : document.getElementById('f_seriesNumber').value.trim(),
-    seriesTotal: (isTV || isComic || isGame || isMovie) ? '' : document.getElementById('f_seriesTotal').value.trim(),
+    seriesName: (isTV || isComic || isGame || isMovie || isBoardGame) ? '' : document.getElementById('f_seriesName').value.trim(),
+    seriesNumber: (isTV || isComic || isGame || isMovie || isBoardGame) ? '' : document.getElementById('f_seriesNumber').value.trim(),
+    seriesTotal: (isTV || isComic || isGame || isMovie || isBoardGame) ? '' : document.getElementById('f_seriesTotal').value.trim(),
     totalIssues: isComic ? document.getElementById('f_totalIssues').value.trim() : '',
     currentIssue: isComic ? document.getElementById('f_currentIssue').value.trim() : '',
     currentIssuePage: isComic ? document.getElementById('f_currentIssuePage').value.trim() : '',
@@ -3197,6 +3343,87 @@ document.getElementById('rereadConfirmBtn').addEventListener('click', async ()=>
   render();
 });
 
+/* ---------- Play Log (Board Games) ---------- */
+function renderPlayHistory(item){
+  const container = document.getElementById('playHistoryList');
+  const sessions = (item.playSessions || []).slice().sort((a,b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+  if(sessions.length === 0){
+    container.innerHTML = `<div style="color:rgba(35,38,47,0.5); font-size:12px;">No plays logged yet.</div>`;
+    return;
+  }
+  container.innerHTML = `<div style="font-family:'IBM Plex Mono', monospace; font-size:10px; color:rgba(35,38,47,0.45); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Play History (${sessions.length})</div>` +
+    sessions.map(s => `
+      <div style="padding:8px 0; border-top:1px solid rgba(35,38,47,0.1); font-size:12px;">
+        <div style="display:flex; justify-content:space-between; gap:8px;">
+          <strong>${escapeHtml(formatDateShort(s.date))}</strong>
+          ${s.winner ? `<span style="color:var(--rust);">🏆 ${escapeHtml(s.winner)}</span>` : ''}
+        </div>
+        ${s.players ? `<div style="color:rgba(35,38,47,0.65); margin-top:2px;">${escapeHtml(s.players)}</div>` : ''}
+        ${s.scores ? `<div style="color:rgba(35,38,47,0.5); margin-top:2px; font-family:'IBM Plex Mono', monospace; font-size:11px;">${escapeHtml(s.scores)}</div>` : ''}
+        ${s.notes ? `<div style="color:rgba(35,38,47,0.55); margin-top:4px; font-style:italic;">${escapeHtml(s.notes)}</div>` : ''}
+      </div>
+    `).join('');
+}
+
+document.getElementById('logPlayBtn').addEventListener('click', ()=>{
+  document.getElementById('play_date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('play_winner').value = '';
+  document.getElementById('play_players').value = '';
+  document.getElementById('play_scores').value = '';
+  document.getElementById('play_notes').value = '';
+  document.getElementById('playLogConfirmField').classList.remove('hidden');
+  document.getElementById('playLogStatus').textContent = '';
+});
+
+document.getElementById('playLogCancelBtn').addEventListener('click', ()=>{
+  document.getElementById('playLogConfirmField').classList.add('hidden');
+});
+
+document.getElementById('playLogConfirmBtn').addEventListener('click', async ()=>{
+  const item = editingId ? items.find(i => i.id === editingId) : null;
+  if(!item) return;
+
+  const date = document.getElementById('play_date').value || new Date().toISOString().slice(0,10);
+  const winner = document.getElementById('play_winner').value.trim();
+  const players = document.getElementById('play_players').value.trim();
+  const scores = document.getElementById('play_scores').value.trim();
+  const notes = document.getElementById('play_notes').value.trim();
+
+  if(!Array.isArray(item.playSessions)) item.playSessions = [];
+  // A repeat play if this game already had at least one session logged
+  // before this one — same "isRepeat" idea used for rereads/rewatches,
+  // just driven by the play log instead of a status transition.
+  const isRepeat = item.playSessions.length > 0;
+
+  const session = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2,8),
+    date, winner, players, scores, notes,
+    createdAt: Date.now()
+  };
+  item.playSessions.push(session);
+  await saveItem(item);
+
+  const journalEntry = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2,8),
+    date,
+    type: 'played',
+    itemId: item.id,
+    itemTitle: item.title,
+    category: item.category,
+    pages: 0, episodes: 0, issues: 0, rating: 0,
+    isRepeat,
+    note: [players ? `Players: ${players}` : '', winner ? `Winner: ${winner}` : '', scores ? `Scores: ${scores}` : '', notes].filter(Boolean).join(' — '),
+    createdAt: Date.now()
+  };
+  await saveJournalEntryToStorage(journalEntry);
+  journalEntries.push(journalEntry);
+
+  document.getElementById('playLogConfirmField').classList.add('hidden');
+  document.getElementById('playLogStatus').textContent = `Logged ✓ — ${formatDateShort(date)}`;
+  renderPlayHistory(item);
+  render();
+});
+
 document.getElementById('search').addEventListener('input', render);
 document.getElementById('statusFilter').addEventListener('change', render);
 document.getElementById('sortBy').addEventListener('change', render);
@@ -3206,7 +3433,8 @@ const CREATOR_LABEL = {
   "Books": "author",
   "Comics": "writer/artist",
   "Movies": "director",
-  "TV Shows": "creator/network"
+  "TV Shows": "creator/network",
+  "Board Games": "designer"
 };
 
 // Sites the user asked to prioritize for lookups (no free public API for
@@ -3216,7 +3444,8 @@ const SITE_HINT = {
   "Books": "goodreads.com",
   "Comics": "leagueofcomicgeeks.com",
   "Movies": "imdb.com",
-  "TV Shows": "imdb.com"
+  "TV Shows": "imdb.com",
+  "Board Games": "boardgamegeek.com"
 };
 
 document.getElementById('lookupBtn').addEventListener('click', performLookup);
@@ -3304,6 +3533,12 @@ function renderLookupResults(matches, title, isBook){
       }
       if(document.getElementById('f_category').value === 'Movies' && m.runtime){
         document.getElementById('f_runtime').value = m.runtime;
+      }
+      if(document.getElementById('f_category').value === 'Board Games'){
+        if(m.minPlayers) document.getElementById('f_minPlayers').value = m.minPlayers;
+        if(m.maxPlayers) document.getElementById('f_maxPlayers').value = m.maxPlayers;
+        if(m.playTimeMin) document.getElementById('f_playTimeMin').value = m.playTimeMin;
+        if(m.playTimeMax) document.getElementById('f_playTimeMax').value = m.playTimeMax;
       }
       if(m.description){
         const notesEl = document.getElementById('f_notes');
@@ -3485,6 +3720,66 @@ async function lookupComicVineFree(title){
   }
 }
 
+async function fetchBggXml(mode, params){
+  const sessionRes = await supabaseClient.auth.getSession();
+  const token = sessionRes && sessionRes.data && sessionRes.data.session ? sessionRes.data.session.access_token : '';
+  const res = await fetch('/api/lookup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({ provider: 'bgg', mode, ...params })
+  });
+  if(!res.ok) return null;
+  const data = await res.json();
+  return data.xml || null;
+}
+
+// Free lookup for Board Games via BoardGameGeek's public XML API. BGG
+// doesn't support CORS at all, so both requests go through the same
+// serverless relay used for Comic Vine — the relay just forwards the raw
+// XML back, and all the actual parsing happens here with the browser's
+// built-in DOMParser (no XML library needed, and keeps the server side
+// of this as simple as possible).
+async function lookupBggFree(title){
+  try{
+    const searchXml = await fetchBggXml('search', { query: title });
+    if(!searchXml) return [];
+    const searchDoc = new DOMParser().parseFromString(searchXml, 'text/xml');
+    if(searchDoc.querySelector('parsererror')) return [];
+
+    const items = Array.from(searchDoc.querySelectorAll('item')).slice(0, 2);
+    if(items.length === 0) return [];
+    const ids = items.map(el => el.getAttribute('id')).filter(Boolean);
+    if(ids.length === 0) return [];
+
+    const thingXml = await fetchBggXml('thing', { ids: ids.join(',') });
+    if(!thingXml) return [];
+    const thingDoc = new DOMParser().parseFromString(thingXml, 'text/xml');
+    if(thingDoc.querySelector('parsererror')) return [];
+
+    return Array.from(thingDoc.querySelectorAll('item')).map(el => {
+      const nameEl = el.querySelector('name[type="primary"]') || el.querySelector('name');
+      const designers = Array.from(el.querySelectorAll('link[type="boardgamedesigner"]')).map(l => l.getAttribute('value')).filter(Boolean);
+      const getVal = (sel) => { const e = el.querySelector(sel); return e ? e.getAttribute('value') : null; };
+      let description = (el.querySelector('description') ? el.querySelector('description').textContent : '').trim();
+      if(description.length > 300) description = description.slice(0, 297) + '…';
+      return {
+        title: nameEl ? nameEl.getAttribute('value') : title,
+        creator: designers.join(', '),
+        year: getVal('yearpublished') || '',
+        coverImageUrl: (el.querySelector('image') ? el.querySelector('image').textContent.trim() : '') || null,
+        description,
+        minPlayers: getVal('minplayers') || '',
+        maxPlayers: getVal('maxplayers') || '',
+        playTimeMin: getVal('minplaytime') || '',
+        playTimeMax: getVal('maxplaytime') || ''
+      };
+    });
+  }catch(e){
+    console.error('BGG lookup failed', e);
+    return [];
+  }
+}
+
 async function performLookup(){
   const title = document.getElementById('f_title').value.trim();
   const category = document.getElementById('f_category').value;
@@ -3502,15 +3797,17 @@ async function performLookup(){
   const isTV = category === 'TV Shows';
   const isGame = category === 'Video Games';
   const isComic = category === 'Comics';
+  const isBoardGame = category === 'Board Games';
 
   // Books try Open Library first (fully keyless, no exposure risk of any
   // kind), falling back to Google Books only if that comes up empty.
   // Every other category has its own single free source: iTunes, RAWG,
-  // or Comic Vine (the last one via a small server proxy, since its API
-  // blocks direct browser requests — see lookupComicVineFree above).
-  // "Look up" doesn't call Claude at all, so there's no ongoing AI cost
-  // from using this feature, regardless of how often it's used.
-  const sourceLabel = isBook ? 'Open Library' : (isGame ? 'RAWG' : (isComic ? 'Comic Vine' : 'iTunes'));
+  // Comic Vine, or BoardGameGeek (the last two via a small server proxy,
+  // since their APIs block direct browser requests — see
+  // lookupComicVineFree / lookupBggFree above). "Look up" doesn't call
+  // Claude at all, so there's no ongoing AI cost from using this feature,
+  // regardless of how often it's used.
+  const sourceLabel = isBook ? 'Open Library' : (isGame ? 'RAWG' : (isComic ? 'Comic Vine' : (isBoardGame ? 'BoardGameGeek' : 'iTunes')));
   btn.disabled = true;
   resultsEl.classList.add('hidden');
   resultsEl.innerHTML = '';
@@ -3528,6 +3825,7 @@ async function performLookup(){
     else if(isMovie || isTV) matches = await lookupItunesFree(title, isTV ? 'tvShow' : 'movie');
     else if(isGame) matches = await lookupRawgFree(title);
     else if(isComic) matches = await lookupComicVineFree(title);
+    else if(isBoardGame) matches = await lookupBggFree(title);
 
     if(matches.length === 0){
       statusEl.textContent = 'No matches found there — try a more specific title, or fill in the details by hand.';
@@ -3579,6 +3877,7 @@ const JOURNAL_TYPE_META = {
   started: { icon: '🚀', label: 'Started' },
   finished: { icon: '✅', label: 'Finished' },
   watched: { icon: '🎬', label: 'Watched / Played' },
+  played: { icon: '🎲', label: 'Board Game Played' },
   note: { icon: '📝', label: 'Note' }
 };
 
@@ -3859,7 +4158,7 @@ function renderJournal(){
       // "Finished" entries show the media type's icon instead of a generic
       // checkmark, so it's clear at a glance what kind of thing was completed.
       const displayIcon = (e.type === 'finished' && CATEGORY_ICON[e.category]) ? CATEGORY_ICON[e.category] : meta.icon;
-      const REPEAT_LABEL = { "Books": "Re-Read", "Comics": "Reread", "Movies": "Rewatch", "TV Shows": "Rewatch", "Video Games": "Replay" };
+      const REPEAT_LABEL = { "Books": "Re-Read", "Comics": "Reread", "Movies": "Rewatch", "TV Shows": "Rewatch", "Video Games": "Replay", "Board Games": "Replay" };
       const repeatBadge = e.isRepeat
         ? ` <span title="${REPEAT_LABEL[e.category] || 'Repeat'}" style="color:var(--gold); font-size:13px;">⟳</span>`
         : '';
@@ -4199,8 +4498,16 @@ const ACHIEVEMENTS = [
   { id:'games_hours', category:'Video Games', icon:'⏳', title:'Grinder', desc:'Play 500 hours of games', target:500,
     getCurrent: () => Math.round(items.filter(i => i.category === 'Video Games').reduce((sum,i) => sum + (parseFloat(i.hoursPlayed) || 0), 0)) },
 
+  // Board Games
+  { id:'boardgames_5', category:'Board Games', icon:'🎲', title:'Collector', desc:'Own 5 board games', target:5,
+    getCurrent: () => countCompleted('Board Games') },
+  { id:'boardgames_25', category:'Board Games', icon:'📦', title:'Game Shelf', desc:'Own 25 board games', target:25,
+    getCurrent: () => countCompleted('Board Games') },
+  { id:'boardgames_plays', category:'Board Games', icon:'🎉', title:'Game Night Regular', desc:'Log 20 plays', target:20,
+    getCurrent: () => items.filter(i => i.category === 'Board Games').reduce((sum,i) => sum + (Array.isArray(i.playSessions) ? i.playSessions.length : 0), 0) },
+
   // Overall
-  { id:'overall_renaissance', category:'Overall', icon:'🎭', title:'Renaissance', desc:'Complete at least one item in every category', target:5,
+  { id:'overall_renaissance', category:'Overall', icon:'🎭', title:'Renaissance', desc:'Complete at least one item in every category', target:CATEGORIES.length,
     getCurrent: () => CATEGORIES.filter(c => countCompleted(c) > 0).length },
   { id:'overall_critic', category:'Overall', icon:'⭐', title:'Critic', desc:'Rate 50 items', target:50,
     getCurrent: () => items.filter(i => i.rating > 0).length },
@@ -4965,7 +5272,7 @@ async function generateSummaryImage(){
     const maxCat = Math.max(1, ...Object.values(stats.catCounts));
     const catHexMap = {
       "Video Games": "#3E7C6B", "Books": "#C9A227", "Comics": "#B4553B",
-      "Movies": "#4C6FA6", "TV Shows": "#7A5980"
+      "Movies": "#4C6FA6", "TV Shows": "#7A5980", "Board Games": "#A6743F"
     };
     CATEGORIES.forEach(c => {
       const count = stats.catCounts[c] || 0;
@@ -5155,11 +5462,13 @@ function csvEscape(val){
 }
 
 function buildLibraryCSV(){
-  const headers = ['Title','Category','Creator','Status','Rating','Year','Format','AuthorGender','PageCount','CurrentPage','ISBN','PublishDate','Platform','GameFormat','PlatformLauncher','HoursPlayed','SignedCopy','SpecialEdition','SpecialEditionDetail','Seasons','DateStarted','DateFinished','Notes'];
+  const headers = ['Title','Category','Creator','Status','Rating','Year','Format','AuthorGender','PageCount','CurrentPage','ISBN','PublishDate','Platform','GameFormat','PlatformLauncher','HoursPlayed','MinPlayers','MaxPlayers','PlayTimeMin','PlayTimeMax','ManualUrl','PlaySessions','SignedCopy','SpecialEdition','SpecialEditionDetail','Seasons','DateStarted','DateFinished','Notes'];
   const rows = items.map(i => [
     i.title, i.category, i.creator, i.status, i.rating, i.year, i.format, i.authorGender || '',
     i.pageCount, i.currentPage, i.isbn, i.publishDate,
     i.platform || '', i.gameFormat || '', i.platformLauncher || '', i.hoursPlayed || '',
+    i.minPlayers || '', i.maxPlayers || '', i.playTimeMin || '', i.playTimeMax || '', i.manualUrl || '',
+    Array.isArray(i.playSessions) ? i.playSessions.map(s => `${s.date}${s.winner ? ' (winner: '+s.winner+')' : ''}`).join('; ') : '',
     i.signedCopy ? 'Yes' : '', i.specialEdition ? 'Yes' : '', i.specialEditionDetail || '',
     Array.isArray(i.seasons) ? i.seasons.map(s => `S${s.number}:${s.episodesWatched}${s.totalEpisodes ? '/'+s.totalEpisodes : ''}${s.completed ? ' (done)' : ''}`).join('; ') : '',
     i.dateStarted, i.dateFinished, i.notes
@@ -5242,6 +5551,7 @@ function blankItem(){
     id: '', title: '', category: '', creator: '', year: '', coverUrl: '', isbn: '',
     pageCount: '', currentPage: '', publishDate: '', format: '', authorGender: '', runtime: '',
     hoursPlayed: '', platform: '', gameFormat: '', platformLauncher: '', seasons: [], totalIssues: '', currentIssue: '', currentIssuePage: '',
+    minPlayers: '', maxPlayers: '', playTimeMin: '', playTimeMax: '', manualUrl: '', playSessions: [],
     progressPercent: '', status: 'Backlog', dateStarted: '', dateFinished: '', rating: 0,
     genre: '', seriesName: '', seriesNumber: '', seriesTotal: '', priority: '', tags: '',
     source: '', cost: '', signedCopy: false, specialEdition: false, specialEditionDetail: '',
@@ -5350,6 +5660,7 @@ document.getElementById('importCsvFile').addEventListener('change', async (e)=>{
         rating: parseFloat(r.Rating) || 0, year: r.Year || '', format: r.Format || '',
         authorGender: r.AuthorGender || '',
         platform: r.Platform || '', gameFormat: r.GameFormat || '', platformLauncher: r.PlatformLauncher || '', hoursPlayed: r.HoursPlayed || '',
+        minPlayers: r.MinPlayers || '', maxPlayers: r.MaxPlayers || '', playTimeMin: r.PlayTimeMin || '', playTimeMax: r.PlayTimeMax || '', manualUrl: r.ManualUrl || '',
         pageCount: r.PageCount || '', currentPage: r.CurrentPage || '', isbn: r.ISBN || '',
         publishDate: r.PublishDate || '', dateStarted: r.DateStarted || '', dateFinished: r.DateFinished || '',
         notes: r.Notes || ''
