@@ -4556,6 +4556,25 @@ function computeOnThisDay(){
   return deduped;
 }
 
+function computeCategoryTargetsBreakdown(yearVal){
+  const year = yearVal ? parseInt(yearVal) : new Date().getFullYear();
+  const now = new Date();
+  const startOfYear = new Date(year, 0, 1);
+  const endOfYear = new Date(year, 11, 31);
+  const totalDays = Math.round((endOfYear - startOfYear) / 86400000) + 1;
+  const dayOfYear = now.getFullYear() === year ? Math.round((now - startOfYear) / 86400000) + 1 : totalDays;
+
+  return CATEGORIES.filter(c => (goalsConfig.yearly[c] || 0) > 0).map(c => {
+    const target = goalsConfig.yearly[c];
+    const completed = items.filter(i => {
+      if(i.category !== c || i.status !== 'Completed' || !i.dateFinished) return false;
+      return new Date(i.dateFinished + 'T00:00:00').getFullYear() === year;
+    }).length;
+    const expectedByNow = Math.round((Math.min(dayOfYear, totalDays) / totalDays) * target);
+    return { category: c, target, completed, onTrack: completed >= expectedByNow, pct: Math.min(100, Math.round((completed/target)*100)) };
+  });
+}
+
 function computeYearlyChallenge(yearVal){
   const cat = getDashboardCategory();
   const year = yearVal ? parseInt(yearVal) : new Date().getFullYear();
@@ -4604,6 +4623,7 @@ function renderStats(){
   const spend = computeSpend(catList);
   const dailyPages = computeDailyPagesProgress(month, year);
   const challenge = computeYearlyChallenge(year || new Date().getFullYear());
+  const categoryTargets = computeCategoryTargetsBreakdown(year || new Date().getFullYear());
   const onThisDay = computeOnThisDay();
   const cat = getDashboardCategory();
   const grid = document.getElementById('statsGrid');
@@ -4708,6 +4728,24 @@ function renderStats(){
       <div class="stat-card wide">
         <div class="stat-label" style="margin-bottom:4px;">Yearly Challenge</div>
         <div style="color:rgba(35,38,47,0.5); font-size:13px;">No goal set${cat ? ' for ' + escapeHtml(cat) : ''} yet — click "🎯 Edit Goals" to set one.</div>
+      </div>
+    `;
+  }
+
+  if(categoryTargets.length > 0){
+    html += `
+      <div class="stat-card wide">
+        <div class="stat-label" style="margin-bottom:12px;">Targets by Category</div>
+        ${categoryTargets.map(t => `
+          <div class="challenge-header" style="margin-bottom:2px;">
+            <span style="font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--text-dark);">${escapeHtml(t.category)}</span>
+            <span class="challenge-status ${t.onTrack ? 'on-track' : 'behind'}">${t.onTrack ? 'On Track' : 'Behind'}</span>
+          </div>
+          <div class="goal-row" style="margin-bottom:10px;">
+            <div class="goal-track"><div class="goal-fill" style="width:${t.pct}%; background:${CAT_COLOR[t.category]}"></div></div>
+            <div class="goal-value">${t.completed} / ${t.target}</div>
+          </div>
+        `).join('')}
       </div>
     `;
   }
