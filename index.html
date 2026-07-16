@@ -352,7 +352,7 @@ select option{
 
 .grid{
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 18px;
   padding-bottom: 8px;
 }
@@ -501,14 +501,15 @@ select option{
   margin-top: 4px; padding-top: 6px; border-top: 1px solid rgba(35,38,47,0.08);
 }
 .season-mini-row{
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: baseline; gap: 6px;
   font-size: 11px; color: rgba(35,38,47,0.6);
+  white-space: nowrap;
 }
 .season-mini-num{
-  font-family: 'IBM Plex Mono', monospace; font-weight: 600; width: 26px; flex-shrink: 0;
+  font-family: 'IBM Plex Mono', monospace; font-weight: 600; width: 22px; flex-shrink: 0;
 }
-.season-mini-rating{ color: var(--rust); font-family: 'IBM Plex Mono', monospace; }
-.season-mini-date{ color: rgba(35,38,47,0.4); font-family: 'IBM Plex Mono', monospace; }
+.season-mini-rating{ color: var(--rust); font-family: 'IBM Plex Mono', monospace; flex-shrink: 0; }
+.season-mini-date{ color: rgba(35,38,47,0.4); font-family: 'IBM Plex Mono', monospace; margin-left: auto; flex-shrink: 0; }
 .season-mini-row.unrated{ color: rgba(35,38,47,0.35); }
 
 .rating-line{ display:flex; align-items:center; gap:7px; }
