@@ -386,7 +386,7 @@ select option{
 
 .grid{
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 26px;
   padding-bottom: 8px;
 }
@@ -944,9 +944,12 @@ select option{
 }
 .summary-preview.hidden{ display:none; }
 
+@media (max-width: 900px){
+  .section-body:not(.mode-list):not(.mode-covers){ grid-template-columns: repeat(2, 1fr); }
+}
 @media (max-width: 600px){
   .header h1{ font-size: 32px; }
-  .grid{ grid-template-columns: 1fr; }
+  .section-body:not(.mode-list):not(.mode-covers){ grid-template-columns: 1fr; }
 }
 
 /* Nav */
@@ -1011,8 +1014,8 @@ select option{
 .section-body.hidden{ display:none; }
 .section-body{
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 26px;
   padding-bottom: 6px;
 }
 .section-body.mode-list{ grid-template-columns: minmax(0, 1fr); gap:8px; }
@@ -2552,7 +2555,7 @@ function buildSeasonMiniListHtml(item){
         <div class="season-mini-row ${s.rating > 0 ? '' : 'unrated'}">
           <span class="season-mini-num">S${s.number}</span>
           <span class="season-mini-rating">${s.rating > 0 ? formatRating(s.rating) + ' ★' : '—'}</span>
-          ${s.dateWatched ? `<span class="season-mini-date">${escapeHtml(formatDateCompact(s.dateWatched))}</span>` : ''}
+          ${s.dateWatched ? `<span class="season-mini-date">${escapeHtml(formatDateShort(s.dateWatched))}</span>` : ''}
         </div>
       `).join('')}
     </div>
