@@ -3459,6 +3459,39 @@ document.getElementById('saveBtn').addEventListener('click', async ()=>{
     journalEntries.push(journalEntry);
   }
 
+  // TV Shows: log a journal entry for every season that just became
+  // "Done" in this save, so finishing a season shows up in the Journal
+  // the same way finishing a whole book/movie does — a show doesn't
+  // need to be fully Completed for individual seasons watched to count,
+  // since most tracked shows are still airing.
+  if(isTV && Array.isArray(data.seasons)){
+    const previousSeasons = (previousItem && Array.isArray(previousItem.seasons)) ? previousItem.seasons : [];
+    for(const season of data.seasons){
+      const prevSeason = previousSeasons.find(s => s.number === season.number);
+      const wasCompleted = prevSeason ? !!prevSeason.completed : false;
+      if(season.completed && !wasCompleted){
+        const entryDate = season.dateWatched || new Date().toISOString().slice(0,10);
+        const seasonJournalEntry = {
+          id: Date.now().toString(36) + Math.random().toString(36).slice(2,8) + season.number,
+          date: entryDate,
+          type: 'watched',
+          itemId: data.id,
+          itemTitle: `${data.title} — Season ${season.number}`,
+          category: data.category,
+          pages: 0,
+          episodes: 0,
+          issues: 0,
+          rating: season.rating || 0,
+          isRepeat: false,
+          note: '',
+          createdAt: Date.now()
+        };
+        await saveJournalEntryToStorage(seasonJournalEntry);
+        journalEntries.push(seasonJournalEntry);
+      }
+    }
+  }
+
   closeModal();
   render();
 });
@@ -5114,6 +5147,28 @@ function computeOnThisDay(){
   return deduped;
 }
 
+// How many "completions" a category contributes toward a yearly goal in
+// a given year. For every category except TV Shows, that's simply items
+// with status Completed and a matching Date Finished. TV Shows count
+// each individually-completed, dated season instead — a show doesn't
+// need to be fully "Completed" for its seasons watched this year to
+// count, since most shows you track are still airing.
+function countCompletedForGoal(category, year){
+  if(category === 'TV Shows'){
+    let count = 0;
+    items.filter(i => i.category === 'TV Shows').forEach(i => {
+      (i.seasons || []).forEach(s => {
+        if(s.completed && s.dateWatched && new Date(s.dateWatched + 'T00:00:00').getFullYear() === year) count++;
+      });
+    });
+    return count;
+  }
+  return items.filter(i => {
+    if(i.category !== category || i.status !== 'Completed' || !i.dateFinished) return false;
+    return new Date(i.dateFinished + 'T00:00:00').getFullYear() === year;
+  }).length;
+}
+
 function computeCategoryTargetsBreakdown(yearVal){
   const year = yearVal ? parseInt(yearVal) : new Date().getFullYear();
   const now = new Date();
@@ -5124,10 +5179,7 @@ function computeCategoryTargetsBreakdown(yearVal){
 
   return CATEGORIES.filter(c => (goalsConfig.yearly[c] || 0) > 0).map(c => {
     const target = goalsConfig.yearly[c];
-    const completed = items.filter(i => {
-      if(i.category !== c || i.status !== 'Completed' || !i.dateFinished) return false;
-      return new Date(i.dateFinished + 'T00:00:00').getFullYear() === year;
-    }).length;
+    const completed = countCompletedForGoal(c, year);
     const expectedByNow = Math.round((Math.min(dayOfYear, totalDays) / totalDays) * target);
     return { category: c, target, completed, onTrack: completed >= expectedByNow, pct: Math.min(100, Math.round((completed/target)*100)) };
   });
@@ -5141,11 +5193,7 @@ function computeYearlyChallenge(yearVal){
   cats.forEach(c => target += goalsConfig.yearly[c] || 0);
   if(!target) return null;
 
-  const completedThisYear = items.filter(i => {
-    if(!cats.includes(i.category)) return false;
-    if(i.status !== 'Completed' || !i.dateFinished) return false;
-    return new Date(i.dateFinished + 'T00:00:00').getFullYear() === year;
-  }).length;
+  const completedThisYear = cats.reduce((sum, c) => sum + countCompletedForGoal(c, year), 0);
 
   const now = new Date();
   const startOfYear = new Date(year, 0, 1);
