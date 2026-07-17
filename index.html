@@ -256,6 +256,20 @@ body{
   padding: 8px 12px;
   font-size: 12px;
 }
+.profile-avatar{
+  width: 34px; height: 34px; border-radius: 50%;
+  background-size: cover; background-position: center;
+  background-color: var(--gold);
+  color: var(--ink-deep);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Fraunces', serif; font-weight: 600; font-size: 13px;
+  flex-shrink: 0; cursor: pointer; border: none; padding: 0;
+}
+#profileAvatarBadge{ display: flex; align-items: center; gap: 8px; background: none; border: none; cursor: pointer; padding: 4px; }
+#profileAvatarName{
+  font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--text-light);
+  max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .toolbar input[type=text], .toolbar select{
   background: rgba(var(--chrome-rgb),0.06);
   border: 1px solid rgba(var(--chrome-rgb),0.18);
@@ -525,13 +539,17 @@ select option{
 .season-mini-row{
   display: flex; align-items: baseline; gap: 8px;
   font-size: 11px; color: rgba(35,38,47,0.6);
-  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
 }
 .season-mini-num{
   font-family: 'IBM Plex Mono', monospace; font-weight: 600; width: 22px; flex-shrink: 0;
 }
-.season-mini-rating{ color: var(--gold); font-family: 'IBM Plex Mono', monospace; flex-shrink: 0; }
-.season-mini-date{ color: rgba(35,38,47,0.4); font-family: 'IBM Plex Mono', monospace; margin-left: auto; flex-shrink: 0; }
+.season-mini-rating{ color: var(--gold); font-family: 'IBM Plex Mono', monospace; flex-shrink: 0; white-space: nowrap; }
+.season-mini-date{
+  color: rgba(35,38,47,0.4); font-family: 'IBM Plex Mono', monospace; margin-left: auto;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
 .season-mini-row.unrated{ color: rgba(35,38,47,0.35); }
 
 .rating-line{ display:flex; align-items:center; gap:7px; }
@@ -1352,6 +1370,10 @@ select option{
 </div>
 
 <div class="toolbar-actions">
+  <button type="button" id="profileAvatarBadge" class="hidden">
+    <div class="profile-avatar" id="profileAvatarBadgeImg"></div>
+    <span id="profileAvatarName"></span>
+  </button>
   <button class="btn btn-ghost hidden" id="settingsBtn">⚙ Settings</button>
   <button class="btn btn-ghost" id="selectModeBtn">☑ Select</button>
   <button class="btn btn-ghost" id="surpriseMeBtn" title="Random pick from your Backlog">🎲 Surprise Me</button>
@@ -1520,8 +1542,40 @@ select option{
     <p class="lookup-status" id="apiKeyHint">Used only for the "Look up" feature, to search the web for title details. Stored locally on this computer — get a key at <span style="text-decoration:underline;">console.anthropic.com</span>.</p>
     <div class="field hidden" id="accountField" style="margin-top:20px; padding-top:16px; border-top:1px solid rgba(35,38,47,0.12);">
       <label>Account</label>
-      <p class="lookup-status" id="accountEmail" style="margin-bottom:10px;"></p>
-      <button class="lookup-btn" type="button" id="signOutBtn">Sign Out</button>
+
+      <div style="display:flex; align-items:center; gap:14px; margin:10px 0;">
+        <div id="profileAvatarPreview" class="profile-avatar" style="width:56px; height:56px; font-size:20px;"></div>
+        <div>
+          <button class="lookup-btn" type="button" id="uploadAvatarBtn">Change Picture</button>
+          <input type="file" id="avatarFile" accept="image/*" class="hidden">
+          <button class="lookup-btn" type="button" id="removeAvatarBtn" style="margin-left:6px;">Remove</button>
+        </div>
+      </div>
+
+      <label style="font-size:10px; margin-top:8px;">Display Name</label>
+      <input type="text" id="profileDisplayName" placeholder="What should The Ledger call you?">
+
+      <p class="lookup-status" id="accountEmail" style="margin:10px 0 2px;"></p>
+      <p class="lookup-status" id="accountMemberSince" style="margin-bottom:10px;"></p>
+
+      <button class="btn btn-primary" type="button" id="saveProfileBtn">Save Profile</button>
+      <p class="lookup-status" id="profileStatus"></p>
+
+      <div style="margin-top:16px; padding-top:14px; border-top:1px solid rgba(35,38,47,0.1);">
+        <label style="font-size:10px;">Change Password</label>
+        <div class="field-row" style="margin-top:6px;">
+          <div class="field">
+            <input type="password" id="changePasswordNew" placeholder="New password">
+          </div>
+          <div class="field">
+            <input type="password" id="changePasswordConfirm" placeholder="Confirm new password">
+          </div>
+        </div>
+        <button class="lookup-btn" type="button" id="changePasswordBtn">Update Password</button>
+        <p class="lookup-status" id="changePasswordStatus"></p>
+      </div>
+
+      <button class="lookup-btn" type="button" id="signOutBtn" style="margin-top:16px; border-color:var(--rust); color:var(--rust);">Sign Out</button>
     </div>
     <div class="field" style="margin-top:20px; padding-top:16px; border-top:1px solid rgba(35,38,47,0.12);">
       <label>Export Data</label>
@@ -2360,6 +2414,18 @@ function formatDateShort(d){
   }catch(e){ return d; }
 }
 
+// Same as formatDateShort but without the year — used in tight spaces
+// like the season mini-list, where "12 Jul" is enough context and the
+// full "12 Jul 2026" was wide enough to overflow the card.
+function formatDateCompact(d){
+  if(!d) return '';
+  try{
+    const dt = new Date(d + 'T00:00:00');
+    if(isNaN(dt.getTime())) return d;
+    return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }catch(e){ return d; }
+}
+
 function statusClass(status){
   if(status === 'Completed') return 'completed';
   if(status === 'In Progress') return 'progress';
@@ -2486,7 +2552,7 @@ function buildSeasonMiniListHtml(item){
         <div class="season-mini-row ${s.rating > 0 ? '' : 'unrated'}">
           <span class="season-mini-num">S${s.number}</span>
           <span class="season-mini-rating">${s.rating > 0 ? formatRating(s.rating) + ' ★' : '—'}</span>
-          ${s.dateWatched ? `<span class="season-mini-date">${escapeHtml(formatDateShort(s.dateWatched))}</span>` : ''}
+          ${s.dateWatched ? `<span class="season-mini-date">${escapeHtml(formatDateCompact(s.dateWatched))}</span>` : ''}
         </div>
       `).join('')}
     </div>
@@ -6344,6 +6410,122 @@ function setAuthMode(mode){
 document.getElementById('authTabSignIn').addEventListener('click', ()=> setAuthMode('signin'));
 document.getElementById('authTabSignUp').addEventListener('click', ()=> setAuthMode('signup'));
 
+/* ---------- Profile / Account control panel ---------- */
+let pendingAvatarUrl = null; // staged (not-yet-saved) avatar, so upload/remove don't persist until "Save Profile"
+
+function getInitials(user){
+  const name = (user.user_metadata && user.user_metadata.display_name) || (user.email || '?');
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if(parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
+function renderProfileAvatar(user){
+  const avatarUrl = user.user_metadata && user.user_metadata.avatar_url;
+  const displayName = (user.user_metadata && user.user_metadata.display_name) || '';
+  const initials = getInitials(user);
+
+  [document.getElementById('profileAvatarBadgeImg'), document.getElementById('profileAvatarPreview')].forEach(el => {
+    if(!el) return;
+    if(avatarUrl){
+      el.style.backgroundImage = `url(${avatarUrl})`;
+      el.textContent = '';
+    } else {
+      el.style.backgroundImage = '';
+      el.textContent = initials;
+    }
+  });
+
+  document.getElementById('profileAvatarName').textContent = displayName || (user.email || '').split('@')[0];
+  document.getElementById('profileAvatarBadge').classList.remove('hidden');
+}
+
+function loadProfileIntoForm(user){
+  pendingAvatarUrl = (user.user_metadata && user.user_metadata.avatar_url) || null;
+  document.getElementById('profileDisplayName').value = (user.user_metadata && user.user_metadata.display_name) || '';
+  const preview = document.getElementById('profileAvatarPreview');
+  if(pendingAvatarUrl){ preview.style.backgroundImage = `url(${pendingAvatarUrl})`; preview.textContent = ''; }
+  else { preview.style.backgroundImage = ''; preview.textContent = getInitials(user); }
+}
+
+document.getElementById('profileAvatarBadge').addEventListener('click', ()=> document.getElementById('settingsBtn').click());
+
+document.getElementById('uploadAvatarBtn').addEventListener('click', ()=> document.getElementById('avatarFile').click());
+document.getElementById('avatarFile').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  e.target.value = '';
+  if(!file) return;
+  try{
+    // Small + square, since it's just an avatar — matches the resize
+    // pattern already used for cover image uploads elsewhere in the app.
+    pendingAvatarUrl = await resizeImageFile(file, 200, 200, 0.85);
+    const preview = document.getElementById('profileAvatarPreview');
+    preview.style.backgroundImage = `url(${pendingAvatarUrl})`;
+    preview.textContent = '';
+  }catch(err){
+    console.error('Avatar upload failed', err);
+    document.getElementById('profileStatus').textContent = 'Could not read that image — try a different file.';
+  }
+});
+document.getElementById('removeAvatarBtn').addEventListener('click', ()=>{
+  pendingAvatarUrl = null;
+  const preview = document.getElementById('profileAvatarPreview');
+  preview.style.backgroundImage = '';
+  preview.textContent = currentSupabaseUser ? getInitials(currentSupabaseUser) : '?';
+});
+
+document.getElementById('saveProfileBtn').addEventListener('click', async ()=>{
+  const statusEl = document.getElementById('profileStatus');
+  const btn = document.getElementById('saveProfileBtn');
+  const displayName = document.getElementById('profileDisplayName').value.trim();
+
+  btn.disabled = true;
+  statusEl.textContent = 'Saving…';
+  try{
+    const { data, error } = await supabaseClient.auth.updateUser({
+      data: { display_name: displayName, avatar_url: pendingAvatarUrl }
+    });
+    if(error) throw error;
+    currentSupabaseUser = data.user;
+    renderProfileAvatar(data.user);
+    statusEl.textContent = 'Profile saved ✓';
+  }catch(err){
+    statusEl.textContent = err.message || 'Something went wrong. Please try again.';
+  }finally{
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('changePasswordBtn').addEventListener('click', async ()=>{
+  const pw = document.getElementById('changePasswordNew').value;
+  const pwConfirm = document.getElementById('changePasswordConfirm').value;
+  const statusEl = document.getElementById('changePasswordStatus');
+  const btn = document.getElementById('changePasswordBtn');
+
+  if(!pw || pw.length < 6){
+    statusEl.textContent = 'Password must be at least 6 characters.';
+    return;
+  }
+  if(pw !== pwConfirm){
+    statusEl.textContent = "Passwords don't match.";
+    return;
+  }
+
+  btn.disabled = true;
+  statusEl.textContent = 'Updating…';
+  try{
+    const { error } = await supabaseClient.auth.updateUser({ password: pw });
+    if(error) throw error;
+    statusEl.textContent = 'Password updated ✓';
+    document.getElementById('changePasswordNew').value = '';
+    document.getElementById('changePasswordConfirm').value = '';
+  }catch(err){
+    statusEl.textContent = err.message || 'Something went wrong. Please try again.';
+  }finally{
+    btn.disabled = false;
+  }
+});
+
 async function showApp(user){
   currentSupabaseUser = user;
   document.getElementById('authGate').classList.add('hidden');
@@ -6352,6 +6534,12 @@ async function showApp(user){
   document.getElementById('apiKeyField').classList.add('hidden');
   document.getElementById('apiKeyHint').classList.add('hidden');
   document.getElementById('accountEmail').textContent = `Signed in as ${user.email}`;
+  if(user.created_at){
+    const joined = new Date(user.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+    document.getElementById('accountMemberSince').textContent = `Member since ${joined}`;
+  }
+  loadProfileIntoForm(user);
+  renderProfileAvatar(user);
   await initApp();
 }
 
